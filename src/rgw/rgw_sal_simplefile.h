@@ -93,8 +93,10 @@ class SimpleFileStore : public StoreDriver {
   virtual int initialize(CephContext* cct, const DoutPrefixProvider* dpp)
       override;
   virtual void finalize(void) override;
+  void maybe_init_store();
 
   virtual const std::string get_name() const override { return "simplefile"; }
+
   virtual std::string get_cluster_id(
       const DoutPrefixProvider* dpp, optional_yield y
   ) override {
@@ -293,6 +295,7 @@ class SimpleFileStore : public StoreDriver {
   virtual void register_admin_apis(RGWRESTMgr* mgr) override;
 
   // TODO make proper bucket path
+  std::filesystem::path meta_path() const;
   std::filesystem::path buckets_path() const;
   std::filesystem::path users_path() const;
   std::filesystem::path bucket_path(const rgw_bucket& bucket) const;
