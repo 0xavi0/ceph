@@ -11,6 +11,8 @@
  * License version 2.1, as published by the Free Software
  * Foundation. See file COPYING.
  */
+#include <fstream>
+
 #include "rgw_sal_simplefile.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -18,6 +20,38 @@
 using namespace std;
 
 namespace rgw::sal {
+
+SimpleFileBucket::SimpleFileBucket(
+    const std::filesystem::path& _path, const SimpleFileStore& _store
+)
+    : store(_store), path(_path), acls() {
+  ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
+}
+
+void SimpleFileBucket::init(
+    const DoutPrefixProvider* dpp, const rgw_bucket& b
+) {
+  ldpp_dout(dpp, 10) << __func__ << ": init bucket: " << get_name() << "["
+                     << path << "]" << dendl;
+  auto meta_path = bucket_metadata_path();
+  ceph_assert(!std::filesystem::exists(meta_path));
+
+  info.bucket = b;
+  info.creation_time = ceph::real_clock::now();
+  info.placement_rule.name = "default";
+  info.placement_rule.storage_class = "STANDARD";
+
+  ofstream ofs;
+  ofs.open(meta_path);
+  ldpp_dout(dpp, 10) << __func__ << ": write meta to " << meta_path << dendl;
+
+  JSONFormatter f(true);
+  f.open_object_section("meta");
+  info.dump(&f);
+  f.close_section();
+  f.flush(ofs);
+  ofs.close();
+}
 
 std::unique_ptr<Object> SimpleFileBucket::get_object(const rgw_obj_key& key) {
   ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
@@ -73,8 +107,8 @@ int SimpleFileBucket::remove_bucket_bypass_gc(
 int SimpleFileBucket::load_bucket(
     const DoutPrefixProvider* dpp, optional_yield y, bool get_stats
 ) {
-  std::filesystem::path meta_file_path =
-      bucket_metadata_path("RGWBucketInfo.json");
+  std::filesystem::path meta_file_path = bucket_metadata_path();
+  ceph_assert(std::filesystem::exists(meta_file_path));
   JSONParser bucket_meta_parser;
   if (!bucket_meta_parser.parse(meta_file_path.c_str())) {
     ldpp_dout(dpp, 10) << "Failed to parse bucket metadata from "
@@ -82,8 +116,17 @@ int SimpleFileBucket::load_bucket(
     return -EINVAL;
   }
 
+  auto n = bucket_meta_parser.find_obj("name");
+  ldpp_dout(dpp, 10) << __func__ << ": bucket name: " << n << dendl;
+
   info.decode_json(&bucket_meta_parser);
   ldpp_dout(dpp, 10) << __func__ << ": TODO " << meta_file_path << dendl;
+
+  auto f = new JSONFormatter(true);
+  ldpp_dout(dpp, 10) << __func__ << ": info: ";
+  info.dump(f);
+  f->flush(*_dout);
+  *_dout << dendl;
   return 0;
 }
 
@@ -138,13 +181,6 @@ int SimpleFileBucket::abort_multiparts(
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
-}
-
-SimpleFileBucket::SimpleFileBucket(
-    const std::filesystem::path& _path, const SimpleFileStore& _store
-)
-    : store(_store), path(_path), acls() {
-  ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
 }
 
 int SimpleFileBucket::try_refresh_info(
@@ -227,10 +263,8 @@ std::filesystem::path SimpleFileBucket::bucket_path() const {
   return path;
 }
 // bucket_metadata_path returns the path to the metadata file metadata_fn
-std::filesystem::path SimpleFileBucket::bucket_metadata_path(
-    const std::string& metadata_fn
-) const {
-  return path / metadata_fn;
+std::filesystem::path SimpleFileBucket::bucket_metadata_path() const {
+  return path / "_meta.json";
 }
 // objects_path returns the path to the buckets objects. Each
 // subdirectory points to an object

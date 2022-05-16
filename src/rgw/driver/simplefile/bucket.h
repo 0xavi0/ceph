@@ -39,9 +39,10 @@ class SimpleFileBucket : public StoreBucket {
   );
   SimpleFileBucket& operator=(const SimpleFileBucket&) = delete;
 
+  void init(const DoutPrefixProvider* dpp, const rgw_bucket& b);
+
   std::filesystem::path bucket_path() const;
-  std::filesystem::path bucket_metadata_path(const std::string& metadata_fn
-  ) const;
+  std::filesystem::path bucket_metadata_path() const;
   std::filesystem::path objects_path() const;
 
   virtual std::unique_ptr<Bucket> clone() override {
