@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <sstream>
 
+#include "common/environment.h"
 #include "common/errno.h"
 
 #include "rgw_sal.h"
@@ -128,18 +129,41 @@ rgw::sal::Store* StoreManager::init_storage_provider(const DoutPrefixProvider* d
       delete store; store = nullptr;
     }
 
+    const char *id = get_env_char(
+      "RGW_DEFAULT_USER_ID",
+      "testid");
+    const char *display_name = get_env_char(
+      "RGW_DEFAULT_USER_DISPLAY_NAME",
+      "M. Tester");
+    const char *email = get_env_char(
+      "RGW_DEFAULT_USER_EMAIL",
+      "tester@ceph.com");
+    const char *access_key = get_env_char(
+      "RGW_DEFAULT_USER_ACCESS_KEY",
+      "0555b35654ad1656d804");
+    const char *secret_key = get_env_char(
+      "RGW_DEFAULT_USER_SECRET_KEY",
+      "h7GhxuBLTrlhVUyxSPUKUV8r/2EI4ngqJxD7iBdBYLhwluN30JaT3Q==");
+    const char *caps = get_env_char(
+      "RGW_DEFAULT_USER_CAPS");
+
     /* XXX: temporary - create testid user */
-    rgw_user testid_user("", "testid", "");
+    rgw_user testid_user("", id, "");
     std::unique_ptr<rgw::sal::User> user = store->get_user(testid_user);
-    user->get_info().display_name = "M. Tester";
-    user->get_info().user_email = "tester@ceph.com";
-    RGWAccessKey k1("0555b35654ad1656d804", "h7GhxuBLTrlhVUyxSPUKUV8r/2EI4ngqJxD7iBdBYLhwluN30JaT3Q==");
-    user->get_info().access_keys["0555b35654ad1656d804"] = k1;
+    user->get_info().display_name = display_name;
+    user->get_info().user_email = email;
+    RGWAccessKey k1(access_key, secret_key);
+    user->get_info().access_keys[access_key] = k1;
     user->get_info().max_buckets = RGW_DEFAULT_MAX_BUCKETS;
+    if (caps != nullptr) {
+        RGWUserCaps rgw_caps;
+        rgw_caps.add_from_string(caps);
+        user->get_info().caps = rgw_caps;
+    }
 
     int r = user->store_user(dpp, null_yield, true);
     if (r < 0) {
-      ldpp_dout(dpp, 0) << "ERROR: failed inserting testid user in dbstore error r=" << r << dendl;
+      ldpp_dout(dpp, 0) << "ERROR: failed inserting " << id << " user in dbstore error r=" << r << dendl;
     }
     return store;
   }
