@@ -359,6 +359,14 @@ enum GetLCHead {
   LCHeadStartDate
 };
 
+static int list_user_id(const DoutPrefixProvider *dpp, DBOpInfo &op, sqlite3_stmt *stmt) {
+  if (!stmt)
+    return -1;
+  op.user_ids.push_back((const char*)sqlite3_column_text(stmt, UserID));
+
+  return 0;
+}
+
 static int list_user(const DoutPrefixProvider *dpp, DBOpInfo &op, sqlite3_stmt *stmt) {
   if (!stmt)
     return -1;
@@ -599,6 +607,7 @@ int SQLiteDB::InitializeDBOps(const DoutPrefixProvider *dpp)
   dbops.RemoveBucket = new SQLRemoveBucket(&this->db, this->getDBname(), cct);
   dbops.GetBucket = new SQLGetBucket(&this->db, this->getDBname(), cct);
   dbops.ListUserBuckets = new SQLListUserBuckets(&this->db, this->getDBname(), cct);
+  dbops.ListUsers = new SQLListUsers(&this->db, this->getDBname(), cct);
   dbops.InsertLCEntry = new SQLInsertLCEntry(&this->db, this->getDBname(), cct);
   dbops.RemoveLCEntry = new SQLRemoveLCEntry(&this->db, this->getDBname(), cct);
   dbops.GetLCEntry = new SQLGetLCEntry(&this->db, this->getDBname(), cct);
@@ -620,6 +629,7 @@ int SQLiteDB::FreeDBOps(const DoutPrefixProvider *dpp)
   delete dbops.RemoveBucket;
   delete dbops.GetBucket;
   delete dbops.ListUserBuckets;
+  delete dbops.ListUsers;
   delete dbops.InsertLCEntry;
   delete dbops.RemoveLCEntry;
   delete dbops.GetLCEntry;
@@ -1781,6 +1791,37 @@ int SQLListUserBuckets::Execute(const DoutPrefixProvider *dpp, struct DBOpParams
   } else {
     SQL_EXECUTE(dpp, params, stmt, list_bucket);
   }
+out:
+  return ret;
+}
+
+int SQLListUsers::Prepare(const DoutPrefixProvider *dpp, struct DBOpParams *params)
+{
+  int ret = -1;
+  struct DBOpPrepareParams p_params = PrepareParams;
+
+  if (!*sdb) {
+    ldpp_dout(dpp, 0)<<"In SQLListUsers - no db" << dendl;
+    return ret;
+  }
+
+  InitPrepareParams(dpp, p_params, params);
+
+  SQL_PREPARE(dpp, p_params, sdb, stmt, ret, "PrepareListUsers");
+out:
+  return ret;
+}
+
+int SQLListUsers::Bind(const DoutPrefixProvider *dpp, struct DBOpParams *params)
+{
+  return 0;
+}
+
+int SQLListUsers::Execute(const DoutPrefixProvider *dpp, struct DBOpParams *params)
+{
+  int ret = 0;
+
+  SQL_EXECUTE(dpp, params, stmt, list_user_id);
 out:
   return ret;
 }

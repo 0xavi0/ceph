@@ -108,6 +108,8 @@ DBOp *DB::getDBOp(const DoutPrefixProvider *dpp, std::string_view Op,
     return dbops.GetBucket;
   if (!Op.compare("ListUserBuckets"))
     return dbops.ListUserBuckets;
+  if (!Op.compare("ListUsers"))
+    return dbops.ListUsers;
   if (!Op.compare("InsertLCEntry"))
     return dbops.InsertLCEntry;
   if (!Op.compare("RemoveLCEntry"))
@@ -300,7 +302,7 @@ int DB::get_user(const DoutPrefixProvider *dpp,
     goto out;
 
   /* Verify if its a valid user */
-  if (params.op.user.uinfo.access_keys.empty()) {
+  if (params.op.user.uinfo.access_keys.empty() || params.op.user.uinfo.user_id.id.empty()) {
     ldpp_dout(dpp, 0)<<"In GetUser - No user with query(" <<query_str.c_str()<<"), user_id(" << uinfo.user_id <<") found" << dendl;
     return -ENOENT;
   }
@@ -626,6 +628,23 @@ int DB::list_buckets(const DoutPrefixProvider *dpp, const std::string& query_str
   }
 
 out:
+  return ret;
+}
+
+int DB::list_users(const DoutPrefixProvider *dpp, std::list<std::string> & users) {
+  int ret = 0;
+
+  DBOpParams params = {};
+  InitializeParams(dpp, &params);
+
+  ret = ProcessOp(dpp, "ListUsers", &params);
+
+  if (ret) {
+    ldpp_dout(dpp, 0)<<"In ListUsers failed err:(" <<ret<<") " << dendl;
+    return ret;
+  }
+  users = params.op.user_ids;
+  
   return ret;
 }
 

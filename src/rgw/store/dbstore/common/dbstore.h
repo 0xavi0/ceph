@@ -127,6 +127,7 @@ struct DBOpInfo {
   DBOpLCHeadInfo lc_head;
   DBOpLCEntryInfo lc_entry;
   uint64_t list_max_count;
+  std::list<std::string> user_ids;
 };
 
 struct DBOpParams {
@@ -345,6 +346,7 @@ struct DBOps {
   class RemoveBucketOp *RemoveBucket;
   class GetBucketOp *GetBucket;
   class ListUserBucketsOp *ListUserBuckets;
+  class ListUsersOp *ListUsers;
   class InsertLCEntryOp *InsertLCEntry;
   class RemoveLCEntryOp *RemoveLCEntry;
   class GetLCEntryOp *GetLCEntry;
@@ -976,6 +978,18 @@ class ListUserBucketsOp: virtual public DBOp {
     }
 };
 
+class ListUsersOp: virtual public DBOp {
+  private:
+    static constexpr std::string_view Query = "SELECT UserID FROM '{}'";
+
+  public:
+    virtual ~ListUsersOp() {};
+
+    static std::string Schema(DBOpPrepareParams &params) {
+        return fmt::format(Query, params.user_table);
+    }
+};
+
 class PutObjectOp: virtual public DBOp {
   private:
     static constexpr std::string_view Query =
@@ -1566,6 +1580,7 @@ class DB {
         bool need_stats,
         RGWUserBuckets *buckets,
         bool *is_truncated);
+    int list_users(const DoutPrefixProvider *dpp, std::list<std::string> & users);
     int update_bucket(const DoutPrefixProvider *dpp, const std::string& query_str,
         RGWBucketInfo& info, bool exclusive,
         const rgw_user* powner_id, std::map<std::string, bufferlist>* pattrs,
