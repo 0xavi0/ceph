@@ -23,7 +23,7 @@ class SimpleFileStore;
 
 class SimpleFileObject : public StoreObject {
  private:
-  const SimpleFileStore& store;
+  SimpleFileStore* store;
   RGWAccessControlPolicy acls;
 
  protected:
@@ -64,11 +64,9 @@ class SimpleFileObject : public StoreObject {
   };
   SimpleFileObject& operator=(const SimpleFileObject&) = delete;
 
-  SimpleFileObject(const SimpleFileStore& _st, const rgw_obj_key& _k)
+  SimpleFileObject(SimpleFileStore* _st, const rgw_obj_key& _k)
       : StoreObject(_k), store(_st) {}
-  SimpleFileObject(
-      const SimpleFileStore& _st, const rgw_obj_key& _k, Bucket* _b
-  )
+  SimpleFileObject(SimpleFileStore* _st, const rgw_obj_key& _k, Bucket* _b)
       : StoreObject(_k, _b), store(_st) {}
 
   virtual std::unique_ptr<Object> clone() override {

@@ -22,10 +22,10 @@ using namespace std;
 namespace rgw::sal {
 
 SimpleFileBucket::SimpleFileBucket(
-    const std::filesystem::path& _path, const SimpleFileStore& _store
+    const std::filesystem::path& _path, SimpleFileStore* _store
 )
     : store(_store), path(_path), acls() {
-  ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
+  ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
 }
 
 void SimpleFileBucket::init(
@@ -57,9 +57,9 @@ void SimpleFileBucket::init(
 }
 
 std::unique_ptr<Object> SimpleFileBucket::get_object(const rgw_obj_key& key) {
-  ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
-  /** TODO Get an @a Object belonging to this bucket */
-  return nullptr;
+  ldout(store->ceph_context(), 10)
+      << "bucket::" << __func__ << ": key" << key << dendl;
+  return make_unique<SimpleFileObject>(this->store, key);
 }
 
 int SimpleFileBucket::list(
@@ -140,7 +140,7 @@ int SimpleFileBucket::chown(
   return -ENOTSUP;
 }
 bool SimpleFileBucket::is_owner(User* user) {
-  ldout(store.ceph_context(), 10) << __func__ << ": TODO" << dendl;
+  ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
   return true;
 }
 int SimpleFileBucket::check_empty(

@@ -105,7 +105,7 @@ int SimpleFileUser::remove_user(
 }
 
 static void populate_buckets_from_path(
-    const SimpleFileStore& store, const DoutPrefixProvider* dpp,
+    SimpleFileStore* store, const DoutPrefixProvider* dpp,
     std::filesystem::path path, BucketList& buckets
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": from path " << path << dendl;
@@ -127,7 +127,7 @@ int SimpleFileUser::list_buckets(
   // bucket
   ldpp_dout(dpp, 10) << __func__ << ": marker (" << marker << ", " << end_marker
                      << "), max=" << max << dendl;
-  populate_buckets_from_path(store, dpp, store.buckets_path(), buckets);
+  populate_buckets_from_path(store, dpp, store->buckets_path(), buckets);
   ldpp_dout(dpp, 10) << __func__ << ": buckets=" << buckets.get_buckets()
                      << dendl;
   return 0;
@@ -150,7 +150,7 @@ int SimpleFileUser::create_bucket(
   f->flush(*_dout);
   *_dout << dendl;
 
-  const auto path = store.bucket_path(b);
+  const auto path = store->bucket_path(b);
   if (std::filesystem::exists(path)) {
     return -EEXIST;
   }

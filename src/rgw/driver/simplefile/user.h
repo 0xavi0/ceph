@@ -26,16 +26,16 @@ class SimpleFileStore;
 
 class SimpleFileUser : public StoreUser {
  private:
-  const SimpleFileStore& store;
+  SimpleFileStore* store;
 
  protected:
   SimpleFileUser(SimpleFileUser&) = default;
   SimpleFileUser& operator=(const SimpleFileUser&) = default;
 
  public:
-  SimpleFileUser(const rgw_user& _u, const SimpleFileStore& _store)
+  SimpleFileUser(const rgw_user& _u, SimpleFileStore* _store)
       : StoreUser(_u), store(_store) {}
-  SimpleFileUser(const RGWUserInfo& _i, const SimpleFileStore& _store)
+  SimpleFileUser(const RGWUserInfo& _i, SimpleFileStore* _store)
       : StoreUser(_i), store(_store) {}
   virtual ~SimpleFileUser() = default;
 
