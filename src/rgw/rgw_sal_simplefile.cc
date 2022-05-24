@@ -12,6 +12,7 @@
 #include "cls/rgw/cls_rgw_client.h"
 #include "common/Clock.h"
 #include "common/errno.h"
+#include "driver/simplefile/notification.h"
 #include "rgw_acl_s3.h"
 #include "rgw_aio.h"
 #include "rgw_aio_throttle.h"
@@ -29,7 +30,6 @@
 #include "services/svc_tier_rados.h"
 #include "services/svc_zone.h"
 #include "services/svc_zone_utils.h"
-
 #define dout_subsys ceph_subsys_rgw
 
 using namespace std;
@@ -54,8 +54,8 @@ std::unique_ptr<Notification> SimpleFileStore::get_notification(
     rgw::notify::EventType event_type, optional_yield y,
     const std::string* object_name
 ) {
-  ldout(ctx(), 10) << __func__ << ": TODO" << dendl;
-  return nullptr;
+  ldout(ctx(), 10) << __func__ << ": return stub notification" << dendl;
+  return std::make_unique<SimpleFileNotification>(obj, src_obj, event_type);
 }
 
 std::unique_ptr<Notification> SimpleFileStore::get_notification(
@@ -64,8 +64,8 @@ std::unique_ptr<Notification> SimpleFileStore::get_notification(
     rgw::sal::Bucket* _bucket, std::string& _user_id, std::string& _user_tenant,
     std::string& _req_id, optional_yield y
 ) {
-  ldout(ctx(), 10) << __func__ << ": TODO" << dendl;
-  return nullptr;
+  ldpp_dout(dpp, 10) << __func__ << ": return stub notification" << dendl;
+  return std::make_unique<SimpleFileNotification>(obj, src_obj, event_type);
 }
 
 // }}}
