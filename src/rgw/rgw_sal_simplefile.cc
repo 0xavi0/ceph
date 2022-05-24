@@ -13,6 +13,7 @@
 #include "common/Clock.h"
 #include "common/errno.h"
 #include "driver/simplefile/notification.h"
+#include "driver/simplefile/writer.h"
 #include "rgw_acl_s3.h"
 #include "rgw_aio.h"
 #include "rgw_aio_throttle.h"
@@ -30,6 +31,7 @@
 #include "services/svc_tier_rados.h"
 #include "services/svc_zone.h"
 #include "services/svc_zone_utils.h"
+
 #define dout_subsys ceph_subsys_rgw
 
 using namespace std;
@@ -88,8 +90,11 @@ std::unique_ptr<Writer> SimpleFileStore::get_atomic_writer(
     const rgw_placement_rule* ptail_placement_rule, uint64_t olh_epoch,
     const std::string& unique_tag
 ) {
-  ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
-  return nullptr;
+  ldpp_dout(dpp, 10) << __func__ << ": return basic atomic writer" << dendl;
+  return std::make_unique<SimpleFileAtomicWriter>(
+      dpp, y, _head_obj, this, owner, ptail_placement_rule, olh_epoch,
+      unique_tag
+  );
 }
 
 // }}}

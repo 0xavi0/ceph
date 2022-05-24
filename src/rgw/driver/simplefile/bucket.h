@@ -18,6 +18,9 @@
 #include <memory>
 #include <string>
 
+#include "common/Formatter.h"
+#include "common/ceph_json.h"
+#include "driver/simplefile/multipart.h"
 #include "rgw_sal.h"
 #include "rgw_sal_store.h"
 
@@ -29,9 +32,32 @@ class SimpleFileBucket : public StoreBucket {
   SimpleFileStore* store;
   const std::filesystem::path path;
   RGWAccessControlPolicy acls;
-
+  // std::map<std::string, SimpleFileMultipartUpload> multipart;
  protected:
+  class Meta {
+   public:
+    RGWBucketInfo info;
+    std::set<std::string> multipart;
+
+    void dump(ceph::Formatter* f) const {
+      f->open_object_section("info");
+      info.dump(f);
+      f->close_section();  // info
+      // encode_json("multipart", multipart, f);
+    }
+
+    void decode_json(JSONObj* obj) {
+      JSONDecoder::decode_json("info", info, obj);
+      // JSONDecoder::decode_json("multipart", multipart, obj);
+    }
+  };
+
   SimpleFileBucket(const SimpleFileBucket&) = default;
+
+  void write_meta(const DoutPrefixProvider* dpp);
+  // void read_meta(const DoutPrefixProvider *dpp);
+  // void add_multipart(const std::string &oid, const std::string &meta);
+  // void remove_multipart(const std::string &oid, const std::string &meta);
 
  public:
   SimpleFileBucket(const std::filesystem::path& _path, SimpleFileStore* _store);
@@ -151,6 +177,11 @@ class SimpleFileBucket : public StoreBucket {
   virtual int purge_instance(const DoutPrefixProvider* dpp) override {
     return -ENOTSUP;
   }
+
+  void mark_multipart_complete(
+      const DoutPrefixProvider* dpp, const std::string& oid,
+      const std::string& meta
+  );
   inline std::string get_cls_name() { return "bucket"; }
 };
 

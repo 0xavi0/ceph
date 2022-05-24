@@ -13,6 +13,7 @@
  */
 #include <fstream>
 
+#include "multipart.h"
 #include "rgw_sal_simplefile.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -44,13 +45,24 @@ void SimpleFileBucket::init(
   info.placement_rule.name = "default";
   info.placement_rule.storage_class = "STANDARD";
 
+  write_meta(dpp);
+}
+
+void SimpleFileBucket::write_meta(const DoutPrefixProvider* dpp) {
+  auto meta_path = bucket_metadata_path();
+
+  lsfs_dout(dpp, 10) << "write metadata to " << meta_path << dendl;
+
+  SimpleFileBucket::Meta meta;
+  meta.info = info;
+  // meta.multipart = multipart;
+
   ofstream ofs;
   ofs.open(meta_path);
-  ldpp_dout(dpp, 10) << __func__ << ": write meta to " << meta_path << dendl;
 
   JSONFormatter f(true);
   f.open_object_section("meta");
-  info.dump(&f);
+  encode_json("meta", meta, &f);
   f.close_section();
   f.flush(ofs);
   ofs.close();
@@ -114,19 +126,23 @@ int SimpleFileBucket::load_bucket(
   ceph_assert(std::filesystem::exists(meta_file_path));
   JSONParser bucket_meta_parser;
   if (!bucket_meta_parser.parse(meta_file_path.c_str())) {
-    ldpp_dout(dpp, 10) << "Failed to parse bucket metadata from "
+    lsfs_dout(dpp, 10) << "Failed to parse bucket metadata from "
                        << meta_file_path << ". Returing EINVAL" << dendl;
     return -EINVAL;
   }
 
-  auto n = bucket_meta_parser.find_obj("name");
-  ldpp_dout(dpp, 10) << __func__ << ": bucket name: " << n << dendl;
+  auto it = bucket_meta_parser.find("meta");
+  ceph_assert(!it.end());
 
-  info.decode_json(&bucket_meta_parser);
-  ldpp_dout(dpp, 10) << __func__ << ": TODO " << meta_file_path << dendl;
+  SimpleFileBucket::Meta meta;
+  JSONDecoder::decode_json("meta", meta, &bucket_meta_parser);
+  lsfs_dout(dpp, 10) "bucket name: " << meta.info.bucket.get_key() << dendl;
+
+  info = meta.info;
+  // multipart = meta.multipart;
 
   auto f = new JSONFormatter(true);
-  ldpp_dout(dpp, 10) << __func__ << ": info: ";
+  lsfs_dout(dpp, 10) << ": info: ";
   info.dump(f);
   f->flush(*_dout);
   *_dout << dendl;
@@ -164,8 +180,16 @@ std::unique_ptr<MultipartUpload> SimpleFileBucket::get_multipart_upload(
     const std::string& oid, std::optional<std::string> upload_id,
     ACLOwner owner, ceph::real_time mtime
 ) {
+  ldout(store->ceph_context(), 10) << "bucket::" << __func__ << ": oid: " << oid
+                                   << ", upload id: " << upload_id << dendl;
+  auto p = new SimpleFileMultipartUpload(
+      store->ctx(), store, this, oid, upload_id, std::move(owner), mtime
+  );
   /** Create a multipart upload in this bucket */
-  return std::unique_ptr<MultipartUpload>();
+  return std::unique_ptr<SimpleFileMultipartUpload>(p);
+  // return std::make_unique<SimpleFileMultipartUpload>(
+  //   store, this, oid, upload_id, std::move(owner), mtime
+  // );
 }
 
 int SimpleFileBucket::list_multiparts(
@@ -217,8 +241,14 @@ int SimpleFileBucket::check_quota(
     const DoutPrefixProvider* dpp, RGWQuota& quota, uint64_t obj_size,
     optional_yield y, bool check_size_only
 ) {
-  ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
-  return -ENOTSUP;
+  ldpp_dout(dpp, 10) << __func__
+                     << ": user(max size: " << quota.user_quota.max_size
+                     << ", max objs: " << quota.user_quota.max_objects
+                     << "), bucket(max size: " << quota.bucket_quota.max_size
+                     << ", max objs: " << quota.bucket_quota.max_objects
+                     << "), obj size: " << obj_size << dendl;
+  ldpp_dout(dpp, 10) << __func__ << ": not implemented, return okay." << dendl;
+  return 0;
 }
 
 int SimpleFileBucket::read_stats(
