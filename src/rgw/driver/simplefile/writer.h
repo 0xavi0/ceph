@@ -16,6 +16,7 @@
 
 #include <memory>
 
+#include "driver/simplefile/object.h"
 #include "rgw_sal.h"
 #include "rgw_sal_store.h"
 
@@ -26,6 +27,12 @@ class SimpleFileStore;
 class SimpleFileAtomicWriter : public StoreWriter {
  protected:
   rgw::sal::SimpleFileStore* store;
+  SimpleFileObject obj;
+  const rgw_user& owner;
+  const rgw_placement_rule* placement_rule;
+  uint64_t olh_epoch;
+  const std::string& unique_tag;
+  uint64_t bytes_written;
 
  public:
   SimpleFileAtomicWriter(
@@ -45,6 +52,8 @@ class SimpleFileAtomicWriter : public StoreWriter {
       const std::string* user_data, rgw_zone_set* zones_trace, bool* canceled,
       optional_yield y
   ) override;
+
+  const std::string get_cls_name() const { return "atomic_writer"; }
 };
 
 class SimpleFileMultipartWriter : public StoreWriter {
