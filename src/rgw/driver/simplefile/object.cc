@@ -29,19 +29,24 @@ SimpleFileObject::SimpleFileReadOp::SimpleFileReadOp(
 int SimpleFileObject::SimpleFileReadOp::prepare(
     optional_yield y, const DoutPrefixProvider* dpp
 ) {
-  const std::filesystem::path data_path = source->store->object_data_path(
-      source->bucket->get_key(), source->get_key()
-  );
+  source->refresh_meta();
 
-  ldpp_dout(dpp, 10) << __func__
-                     << ": TODO bucket_key=" << source->bucket->get_key().name
-                     << " obj_key=" << source->get_key().name
-                     << " path=" << data_path << dendl;
+  auto objspath = source->store->objects_path(source->bucket->get_key());
+  auto objdata = objspath / source->get_name();
+  const std::string metafn = "_meta." + source->get_name();
+  auto objmeta = objspath / metafn;
 
-  const auto size = std::filesystem::file_size(data_path);
-  source->set_key(source->get_key());
-  // must set size, otherwise neither read / iterate is called
-  source->set_obj_size(size);
+  if (!std::filesystem::exists(objmeta)) {
+    lsfs_dout(dpp, 10) << "object metadata not found at " << objmeta << dendl;
+    return -ENOENT;
+  } else if (!std::filesystem::exists(objdata)) {
+    lsfs_dout(dpp, 10) << "object data not found at " << objdata << dendl;
+    return -ENOENT;
+  }
+
+  lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
+                     << ", obj: " << source->get_name()
+                     << ", size: " << source->get_obj_size() << dendl;
   return 0;
 }
 
@@ -68,19 +73,21 @@ int SimpleFileObject::SimpleFileReadOp::read(
 ) {
   // TODO bounds check, etc.
   const auto len = end + 1 - ofs;
-  ldpp_dout(dpp, 10) << __func__ << ": TODO offset=" << ofs << " end=" << end
-                     << " len=" << len << dendl;
+  lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
+                     << ", obj: " << source->get_name()
+                     << ", size: " << source->get_obj_size()
+                     << ", offset: " << ofs << ", end: " << end
+                     << ", len: " << len << dendl;
 
-  const std::filesystem::path object_data_path =
-      source->store->object_data_path(
-          source->bucket->get_key(), source->get_key()
-      );
+  auto objpath = source->store->objects_path(source->bucket->get_key()) /
+                 source->get_name();
+  ceph_assert(std::filesystem::exists(objpath));
 
   std::string error;
-  int ret = bl.pread_file(object_data_path.c_str(), ofs, len, &error);
+  int ret = bl.pread_file(objpath.c_str(), ofs, len, &error);
   if (ret < 0) {
-    ldpp_dout(dpp, 10) << "Failed to read object from file " << object_data_path
-                       << ". Returning EIO" << dendl;
+    lsfs_dout(dpp, 10) << "failed to read object from file " << objpath
+                       << ". Returning EIO." << dendl;
     return -EIO;
   }
   return 0;
@@ -93,20 +100,23 @@ int SimpleFileObject::SimpleFileReadOp::iterate(
 ) {
   // TODO bounds check, etc.
   const auto len = end + 1 - ofs;
+  lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
+                     << ", obj: " << source->get_name()
+                     << ", size: " << source->get_obj_size()
+                     << ", offset: " << ofs << ", end: " << end
+                     << ", len: " << len << dendl;
 
-  ldpp_dout(dpp, 10) << __func__ << ": TODO offset=" << ofs << " end=" << end
-                     << " len=" << len << dendl;
-  const std::filesystem::path object_data_path =
-      source->store->object_data_path(
-          source->bucket->get_key(), source->get_key()
-      );
+  auto objpath = source->store->objects_path(source->bucket->get_key()) /
+                 source->get_name();
+  ceph_assert(std::filesystem::exists(objpath));
+
   // TODO chunk the read
   bufferlist bl;
   std::string error;
-  int ret = bl.pread_file(object_data_path.c_str(), ofs, len, &error);
+  int ret = bl.pread_file(objpath.c_str(), ofs, len, &error);
   if (ret < 0) {
-    ldpp_dout(dpp, 10) << "Failed to read object from file " << object_data_path
-                       << ". Returning EIO" << dendl;
+    lsfs_dout(dpp, 10) << "failed to read object from file " << objpath
+                       << ". Returning EIO." << dendl;
     return -EIO;
   }
 
