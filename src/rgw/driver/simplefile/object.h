@@ -208,9 +208,10 @@ class SimpleFileObject : public StoreObject {
   ) override;
   // will be removed in the future..
   virtual int get_obj_state(
-      const DoutPrefixProvider* dpp, RGWObjState** state, optional_yield y,
+      const DoutPrefixProvider* dpp, RGWObjState** _state, optional_yield y,
       bool follow_olh = true
   ) override {
+    *_state = &state;
     return 0;
   }
   virtual int set_obj_attrs(
