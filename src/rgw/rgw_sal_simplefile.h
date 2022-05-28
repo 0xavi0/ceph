@@ -273,6 +273,9 @@ class SimpleFileStore : public StoreDriver {
     return 0;
   }
 
+  /**
+   * Unsure what this does.
+   */
   virtual std::unique_ptr<Writer> get_append_writer(
       const DoutPrefixProvider* dpp, optional_yield y,
       rgw::sal::Object* _head_obj, const rgw_user& owner,
@@ -281,6 +284,12 @@ class SimpleFileStore : public StoreDriver {
       uint64_t* cur_accounted_size
   ) override;
 
+  /**
+   * Obtain a writer to write an object in one go. The writer may be called
+   * several times by us, but should become available to the user as a whole
+   * once finished, and will not be a multipart upload. This is usually for
+   * smaller objects (up to ~10MiB).
+   */
   virtual std::unique_ptr<Writer> get_atomic_writer(
       const DoutPrefixProvider* dpp, optional_yield y,
       rgw::sal::Object* _head_obj, const rgw_user& owner,
