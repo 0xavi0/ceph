@@ -14,6 +14,8 @@
 #ifndef RGW_STORE_SIMPLEFILE_OBJECT_H
 #define RGW_STORE_SIMPLEFILE_OBJECT_H
 
+#include <filesystem>
+
 #include "rgw_sal.h"
 #include "rgw_sal_store.h"
 
@@ -226,6 +228,9 @@ class SimpleFileObject : public StoreObject {
   ) override {
     return 0;
   }
+
+  std::filesystem::path get_data_path();
+  std::filesystem::path get_metadata_path();
 
   const std::string get_cls_name() { return "object"; }
   void write_meta();

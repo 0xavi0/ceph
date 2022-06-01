@@ -77,4 +77,14 @@ int SimpleFileStore::get_bucket(
   return 0;
 }
 
+bool SimpleFileStore::object_written(
+    const DoutPrefixProvider* dpp, SimpleFileObject* obj
+) {
+  lsfs_dout(dpp, 10) << "bucket: " << obj->get_bucket()->get_name()
+                     << ", object: " << obj->get_name() << dendl;
+
+  SimpleFileBucket* bucket = static_cast<SimpleFileBucket*>(obj->get_bucket());
+  return bucket->maybe_add_object(dpp, obj);
+}
+
 }  // namespace rgw::sal

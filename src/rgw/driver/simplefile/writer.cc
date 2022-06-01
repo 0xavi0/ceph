@@ -55,8 +55,7 @@ int SimpleFileAtomicWriter::process(bufferlist&& data, uint64_t offset) {
   lsfs_dout(dpp, 10) << "data len: " << data.length() << ", offset: " << offset
                      << dendl;
 
-  SimpleFileBucket* b = static_cast<SimpleFileBucket*>(obj.get_bucket());
-  std::filesystem::path object_path = b->objects_path() / obj.get_name();
+  std::filesystem::path object_path = obj.get_data_path();
 
   lsfs_dout(dpp, 10) << "write to object at " << object_path << dendl;
 
@@ -103,6 +102,7 @@ int SimpleFileAtomicWriter::complete(
   obj.write_meta();
 
   *mtime = meta.mtime;
+  store->object_written(dpp, &obj);
   return 0;
 }
 

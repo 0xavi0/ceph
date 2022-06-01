@@ -27,11 +27,15 @@
 namespace rgw::sal {
 
 class SimpleFileStore;
+class SimpleFileObject;
+
 class SimpleFileBucket : public StoreBucket {
  private:
   SimpleFileStore* store;
   const std::filesystem::path path;
   RGWAccessControlPolicy acls;
+  std::map<std::string, std::string> objects_map;
+  version_t object_map_version;
   // std::map<std::string, SimpleFileMultipartUpload> multipart;
  protected:
   class Meta {
@@ -58,6 +62,8 @@ class SimpleFileBucket : public StoreBucket {
   // void read_meta(const DoutPrefixProvider *dpp);
   // void add_multipart(const std::string &oid, const std::string &meta);
   // void remove_multipart(const std::string &oid, const std::string &meta);
+  void write_object_map(const DoutPrefixProvider* dpp);
+  void load_object_map(const DoutPrefixProvider* dpp);
 
  public:
   SimpleFileBucket(const std::filesystem::path& _path, SimpleFileStore* _store);
@@ -199,6 +205,8 @@ class SimpleFileBucket : public StoreBucket {
   virtual int purge_instance(const DoutPrefixProvider* dpp) override {
     return -ENOTSUP;
   }
+
+  bool maybe_add_object(const DoutPrefixProvider* dpp, SimpleFileObject* obj);
 
   void mark_multipart_complete(
       const DoutPrefixProvider* dpp, const std::string& oid,
