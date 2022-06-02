@@ -13,7 +13,8 @@
  */
 #include <fstream>
 
-#include "multipart.h"
+#include "driver/simplefile/bucket_mgr.h"
+#include "driver/simplefile/multipart.h"
 #include "rgw_sal_simplefile.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -23,9 +24,10 @@ using namespace std;
 namespace rgw::sal {
 
 SimpleFileBucket::SimpleFileBucket(
-    const std::filesystem::path& _path, SimpleFileStore* _store
+    const std::filesystem::path& _path, SimpleFileStore* _store,
+    BucketMgrRef _mgr
 )
-    : store(_store), path(_path), acls() {
+    : store(_store), mgr(_mgr), path(_path), acls() {
   ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
 }
 
@@ -46,7 +48,6 @@ void SimpleFileBucket::init(
   info.placement_rule.storage_class = "STANDARD";
 
   write_meta(dpp);
-  write_object_map(dpp);
 }
 
 void SimpleFileBucket::write_meta(const DoutPrefixProvider* dpp) {
@@ -69,45 +70,6 @@ void SimpleFileBucket::write_meta(const DoutPrefixProvider* dpp) {
   ofs.close();
 }
 
-void SimpleFileBucket::write_object_map(const DoutPrefixProvider* dpp) {
-  version_t new_version = object_map_version + 1;
-  bufferlist bl;
-  ceph::encode(new_version, bl);
-  ceph::encode(objects_map, bl);
-
-  auto obj_map_path = path / "_objects.map";
-  auto new_map_path = path / ("_objects.map.v" + std::to_string(new_version));
-  // ensure we did not go back in time.
-  ceph_assert(!std::filesystem::exists(new_map_path));
-
-  lsfs_dout(dpp, 10) << "version " << new_version << " with "
-                     << objects_map.size() << " objects to " << new_map_path
-                     << dendl;
-  bl.write_file(new_map_path.c_str());
-  std::filesystem::remove(obj_map_path);
-  std::filesystem::create_symlink(new_map_path, obj_map_path);
-}
-
-void SimpleFileBucket::load_object_map(const DoutPrefixProvider* dpp) {
-  lsfs_dout(dpp, 10) << "load objects map for bucket " << get_name() << dendl;
-  auto obj_map_path = path / "_objects.map";
-  bufferlist bl;
-  std::string err;
-  bl.read_file(obj_map_path.c_str(), &err);
-  if (!err.empty()) {
-    lsfs_dout(dpp, 0) << "unable to load object map for bucket " << get_name()
-                      << ": " << err << dendl;
-    ceph_abort("unable to load object map for bucket");
-  }
-
-  auto it = bl.cbegin();
-  ceph::decode(object_map_version, it);
-  ceph::decode(objects_map, it);
-
-  lsfs_dout(dpp, 10) << "loaded object map version " << object_map_version
-                     << " with " << objects_map.size() << " objects" << dendl;
-}
-
 std::unique_ptr<Object> SimpleFileBucket::get_object(const rgw_obj_key& key) {
   ldout(store->ceph_context(), 10)
       << "bucket::" << __func__ << ": key" << key << dendl;
@@ -122,6 +84,7 @@ int SimpleFileBucket::list(
     optional_yield y
 ) {
   lsfs_dout(dpp, 10) << "iterate bucket " << get_name() << dendl;
+  auto objects_map = mgr->get_objects();
   lsfs_dout(dpp, 10) << "num objects: " << objects_map.size() << dendl;
 
   for (const auto& entry : objects_map) {
@@ -188,8 +151,6 @@ int SimpleFileBucket::load_bucket(
 
   info = meta.info;
   // multipart = meta.multipart;
-
-  load_object_map(dpp);
 
   auto f = new JSONFormatter(true);
   lsfs_dout(dpp, 10) << ": info: ";
@@ -339,23 +300,6 @@ int SimpleFileBucket::put_info(
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
-}
-
-bool SimpleFileBucket::maybe_add_object(
-    const DoutPrefixProvider* dpp, SimpleFileObject* obj
-) {
-  auto objname = obj->get_name();
-  lsfs_dout(dpp, 10) << "bucket: " << get_name() << ", object: " << objname
-                     << dendl;
-
-  if (objects_map.find(objname) != objects_map.end()) {
-    lsfs_dout(dpp, 10) << "object " << objname << " already exists." << dendl;
-    return true;
-  }
-
-  objects_map[objname] = store->hash_rgw_obj_key(obj->get_key());
-  write_object_map(dpp);
-  return true;
 }
 
 // bucket_path returns the path containing bucket metadata and objects

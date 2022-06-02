@@ -20,6 +20,7 @@
 #include <filesystem>
 
 #include "driver/simplefile/bucket.h"
+#include "driver/simplefile/bucket_mgr.h"
 #include "driver/simplefile/object.h"
 #include "driver/simplefile/user.h"
 #include "driver/simplefile/zone.h"
@@ -90,6 +91,8 @@ class SimpleFileStore : public StoreDriver {
   SimpleFileZone zone;
   const std::filesystem::path data_path;
   CephContext* const cctx;
+  ceph::mutex buckets_map_lock = ceph::make_mutex("buckets_map_lock");
+  std::map<std::string, BucketMgrRef> buckets_map;
 
  public:
   SimpleFileStore(CephContext* c, const std::filesystem::path& data_path);
@@ -101,6 +104,7 @@ class SimpleFileStore : public StoreDriver {
       override;
   virtual void finalize(void) override;
   void maybe_init_store();
+  void init_buckets();
 
   virtual const std::string get_name() const override { return "simplefile"; }
 
@@ -141,6 +145,7 @@ class SimpleFileStore : public StoreDriver {
       const DoutPrefixProvider* dpp, const std::string& user_str,
       optional_yield y, std::unique_ptr<User>* user
   ) override;
+  /* Obtain bucket. */
   virtual int get_bucket(
       User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket
   ) override;
@@ -309,7 +314,17 @@ class SimpleFileStore : public StoreDriver {
       const std::string& unique_tag
   ) override;
 
-  bool object_written(const DoutPrefixProvider* dpp, SimpleFileObject* obj);
+  BucketMgrRef get_bucket_mgr(const std::string& bucketname) {
+    std::lock_guard l(buckets_map_lock);
+    const auto it = buckets_map.find(bucketname);
+    if (it != buckets_map.cend()) {
+      return it->second;
+    }
+
+    auto mgr = std::make_shared<BucketMgr>(cctx, this, bucketname);
+    buckets_map.insert(std::make_pair(bucketname, mgr));
+    return mgr;
+  }
 
   virtual const std::string& get_compression_type(const rgw_placement_rule& rule
   ) override {

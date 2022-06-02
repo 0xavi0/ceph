@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "driver/simplefile/bucket.h"
+#include "driver/simplefile/bucket_mgr.h"
 #include "driver/simplefile/writer.h"
 #include "rgw_sal.h"
 #include "rgw_sal_simplefile.h"
@@ -28,13 +29,14 @@ namespace rgw::sal {
 
 SimpleFileAtomicWriter::SimpleFileAtomicWriter(
     const DoutPrefixProvider* _dpp, optional_yield _y,
-    rgw::sal::Object* _head_obj, SimpleFileStore* _store,
+    rgw::sal::Object* _head_obj, SimpleFileStore* _store, BucketMgrRef _mgr,
     const rgw_user& _owner, const rgw_placement_rule* _ptail_placement_rule,
     uint64_t _olh_epoch, const std::string& _unique_tag
 )
     : StoreWriter(_dpp, _y),
       store(_store),
       obj(_store, _head_obj->get_key(), _head_obj->get_bucket()),
+      mgr(_mgr),
       owner(_owner),
       placement_rule(_ptail_placement_rule),
       olh_epoch(_olh_epoch),
@@ -100,9 +102,9 @@ int SimpleFileAtomicWriter::complete(
   meta.delete_at = delete_at;
   meta.attrs = attrs;
   obj.write_meta();
+  mgr->add_object(&obj);
 
   *mtime = meta.mtime;
-  store->object_written(dpp, &obj);
   return 0;
 }
 
