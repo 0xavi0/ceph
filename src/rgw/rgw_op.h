@@ -277,6 +277,7 @@ public:
 
   virtual dmc::client_id dmclock_client() { return dmc::client_id::metadata; }
   virtual dmc::Cost dmclock_cost() { return 1; }
+  virtual bool check_initialised() const { return true; }
 };
 
 class RGWDefaultResponseOp : public RGWOp {
@@ -1577,6 +1578,7 @@ public:
   RGWOpType get_type() override { return RGW_OP_COPY_OBJ; }
   uint32_t op_mask() override { return RGW_OP_TYPE_WRITE; }
   dmc::client_id dmclock_client() override { return dmc::client_id::data; }
+  virtual bool check_initialised() const override;
 };
 
 class RGWGetACLs : public RGWOp {

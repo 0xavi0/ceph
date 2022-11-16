@@ -5528,6 +5528,10 @@ void RGWCopyObj::execute(optional_yield y)
   }
 }
 
+bool RGWCopyObj::check_initialised() const {
+  return (dest_object != nullptr && dest_bucket != nullptr);
+}
+
 int RGWGetACLs::verify_permission(optional_yield y)
 {
   bool perm;
