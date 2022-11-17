@@ -13,10 +13,16 @@
  */
 #include "driver/sfs/writer.h"
 
+#include <fmt/ostream.h>
+#include <unistd.h>
+
+#include <filesystem>
 #include <memory>
+#include <system_error>
 
 #include "driver/sfs/bucket.h"
 #include "driver/sfs/writer.h"
+#include "rgw_common.h"
 #include "rgw_sal.h"
 #include "rgw_sal_sfs.h"
 
@@ -25,7 +31,6 @@
 using namespace std;
 
 namespace rgw::sal {
-
 SFSAtomicWriter::SFSAtomicWriter(
     const DoutPrefixProvider* _dpp, optional_yield _y,
     rgw::sal::Object* _head_obj, SFStore* _store, sfs::BucketRef _bucketref,
@@ -41,10 +46,118 @@ SFSAtomicWriter::SFSAtomicWriter(
       placement_rule(_ptail_placement_rule),
       olh_epoch(_olh_epoch),
       unique_tag(_unique_tag),
-      bytes_written(0) {
+      bytes_written(0),
+      io_failed(false),
+      fd(-1) {
   lsfs_dout(dpp, 10) << "head_obj: " << _head_obj->get_key()
                      << ", bucket: " << _head_obj->get_bucket()->get_name()
                      << dendl;
+}
+
+SFSAtomicWriter::~SFSAtomicWriter() {
+  if (fd >= 0) {
+    lsfs_dout(dpp, 10)
+        << fmt::format(
+               "BUG: fd:{} still open. closing. (io_failed:{}, object_path:{})",
+               fd, io_failed, object_path.string()
+           )
+        << dendl;
+    close();
+  }
+}
+
+int SFSAtomicWriter::open() noexcept {
+  std::error_code ec;
+  std::filesystem::create_directories(object_path.parent_path(), ec);
+  if (ec) {
+    lsfs_dout(dpp, 10) << "failed to mkdir object path " << object_path << ": "
+                       << ec << dendl;
+    switch (ec.value()) {
+      case ENOSPC:
+        return -ERR_QUOTA_EXCEEDED;
+      default:
+        return -ERR_INTERNAL_ERROR;
+    }
+  }
+
+  int ret;
+  ret = ::open(
+      object_path.c_str(), O_CREAT | O_TRUNC | O_CLOEXEC | O_WRONLY, 0644
+  );
+  if (ret < 0) {
+    lsfs_dout(dpp, 10) << "error opening file " << object_path << ": "
+                       << cpp_strerror(-fd) << dendl;
+    return -ERR_INTERNAL_ERROR;
+  }
+
+  fd = ret;
+  return 0;
+}
+
+int SFSAtomicWriter::close() noexcept {
+  ceph_assert(fd >= 0);
+  int result = 0;
+  int ret;
+
+  ret = ::fsync(fd);
+  if (ret < 0) {
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "failed to fsync fd:{}: {}. continuing.", fd,
+                              cpp_strerror(ret)
+                          )
+                       << dendl;
+  }
+
+  ret = ::close(fd);
+  fd = -1;
+  if (ret < 0) {
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "failed closing fd:{}: {}. continuing.", fd,
+                              cpp_strerror(ret)
+                          )
+                       << dendl;
+    switch (ret) {
+      case -EDQUOT:
+      case -ENOSPC:
+        result = -ERR_QUOTA_EXCEEDED;
+        break;
+      default:
+        result = -ERR_INTERNAL_ERROR;
+    }
+    io_failed = true;
+  }
+  return result;
+}
+
+void SFSAtomicWriter::cleanup() noexcept {
+  lsfs_dout(dpp, 10) << fmt::format(
+                            "cleaning up failed upload to file {}. "
+                            "returning error.",
+                            object_path.string()
+                        )
+                     << dendl;
+
+  std::error_code ec;
+  std::filesystem::remove(object_path, ec);
+  if (ec) {
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "failed deleting file {}: {} {}. ignoring.",
+                              object_path.string(), ec.message(), ec.value()
+                          )
+                       << dendl;
+  }
+
+  const auto dir_fd = ::open(object_path.parent_path().c_str(), O_RDONLY);
+  int ret = ::fsync(dir_fd);
+  if (ret < 0) {
+    lsfs_dout(dpp, 10)
+        << fmt::format(
+               "failed fsyncing dir {} fd:{} for obj file {}: {}. ignoring.",
+               object_path.parent_path().string(), dir_fd, object_path.string(),
+               cpp_strerror(ret)
+           )
+        << dendl;
+  }
 }
 
 int SFSAtomicWriter::prepare(optional_yield y) {
@@ -62,43 +175,70 @@ int SFSAtomicWriter::prepare(optional_yield y) {
     return -ERR_QUOTA_EXCEEDED;
   }
 
-  objref = bucketref->get_or_create(obj.get_key());
+  try {
+    objref = bucketref->get_or_create(obj.get_key());
+  } catch (const std::system_error& e) {
+    lsfs_dout(dpp, 10)
+        << fmt::format(
+               "exception while fetching obj ref from bucket {} db:{}: {}. "
+               "failing operation.",
+               bucketref->get_bucket_id(),
+               store->db_conn->get_storage().filename(), e.what()
+           )
+        << dendl;
+    switch (e.code().value()) {
+      case -EDQUOT:
+      case -ENOSPC:
+        return -ERR_QUOTA_EXCEEDED;
+      default:
+        return -ERR_INTERNAL_ERROR;
+    }
+  }
+  object_path = store->get_data_path() / objref->get_storage_path();
 
-  std::filesystem::path object_path =
-      store->get_data_path() / objref->get_storage_path();
-  std::filesystem::create_directories(object_path.parent_path());
+  lsfs_dout(dpp, 10) << "creating file at " << object_path << dendl;
 
-  lsfs_dout(dpp, 10) << "truncate file at " << object_path << dendl;
-  std::ofstream ofs(object_path, std::ofstream::trunc);
-  ofs.seekp(0);
-  ofs.flush();
-  ofs.close();
-  return 0;
+  return open();
 }
 
 int SFSAtomicWriter::process(bufferlist&& data, uint64_t offset) {
   lsfs_dout(dpp, 10) << "data len: " << data.length() << ", offset: " << offset
-                     << dendl;
-
-  std::filesystem::path object_path =
-      store->get_data_path() / objref->get_storage_path();
-  ceph_assert(std::filesystem::exists(object_path));
-
-  lsfs_dout(dpp, 10) << "write to object at " << object_path << dendl;
-
-  auto mode = std::ofstream::binary | std::ofstream::out | std::ofstream::app;
-  std::ofstream ofs(object_path, mode);
-  ofs.seekp(offset);
-  data.write_stream(ofs);
-  ofs.flush();
-  ofs.close();
-  bytes_written += data.length();
+                     << ", io_failed: " << io_failed << ", fd: " << fd
+                     << ", fn: " << object_path << dendl;
+  if (io_failed) {
+    return -ERR_INTERNAL_ERROR;
+  }
 
   if (data.length() == 0) {
     lsfs_dout(dpp, 10) << "final piece, wrote " << bytes_written << " bytes"
                        << dendl;
+    return 0;
   }
 
+  ceph_assert(fd >= 0);
+  int write_ret = data.write_fd(fd, offset);
+  if (write_ret < 0) {
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "failed to write size:{} offset:{} to fd:{}: {}. "
+                              "marking writer failed. "
+                              "failing future io. "
+                              "will delete partial data on completion. "
+                              "returning internal error.",
+                              data.length(), offset, fd, cpp_strerror(write_ret)
+                          )
+                       << dendl;
+    io_failed = true;
+    close();
+    cleanup();
+    switch (write_ret) {
+      case -EDQUOT:
+      case -ENOSPC:
+        return -ERR_QUOTA_EXCEEDED;
+      default:
+        return -ERR_INTERNAL_ERROR;
+    }
+  }
+  bytes_written += data.length();
   return 0;
 }
 
@@ -117,15 +257,25 @@ int SFSAtomicWriter::complete(
                      << ", if_match: " << if_match
                      << ", if_nomatch: " << if_nomatch << dendl;
 
-  ceph_assert(bytes_written == accounted_size);
   const auto now = ceph::real_clock::now();
-  objref->update_meta(
-      {.size = accounted_size,
-       .etag = etag,
-       .mtime = now,
-       .set_mtime = set_mtime,
-       .delete_at = delete_at}
-  );
+  if (bytes_written != accounted_size) {
+    lsfs_dout(dpp, 10)
+        << fmt::format(
+               "data written != accounted size. {} vs. {}. failing operation. "
+               "returning internal error.",
+               bytes_written, accounted_size
+           )
+        << dendl;
+    close();
+    cleanup();
+    return -ERR_INTERNAL_ERROR;
+  }
+
+  int result = close();
+  if (io_failed) {
+    cleanup();
+    return result;
+  }
 
   // for object-locking enabled buckets, set the bucket's object-locking
   // profile when not defined on the object itself
@@ -144,12 +294,36 @@ int SFSAtomicWriter::complete(
   }
 
   objref->update_attrs(attrs);
+  objref->update_meta(
+      {.size = accounted_size,
+       .etag = etag,
+       .mtime = now,
+       .set_mtime = set_mtime,
+       .delete_at = delete_at}
+  );
 
   if (mtime != nullptr) {
     *mtime = now;
   }
-
-  objref->metadata_finish(store);
+  try {
+    objref->metadata_finish(store);
+  } catch (const std::system_error& e) {
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "failed to update db object {}: {}. "
+                              "failing operation. ",
+                              objref->name, e.what()
+                          )
+                       << dendl;
+    io_failed = true;
+    cleanup();
+    switch (e.code().value()) {
+      case -EDQUOT:
+      case -ENOSPC:
+        return -ERR_QUOTA_EXCEEDED;
+      default:
+        return -ERR_INTERNAL_ERROR;
+    }
+  }
   return 0;
 }
 

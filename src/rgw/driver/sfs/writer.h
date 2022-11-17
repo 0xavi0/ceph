@@ -38,6 +38,15 @@ class SFSAtomicWriter : public StoreWriter {
   uint64_t bytes_written;
   uint versioned_object_id;
 
+ private:
+  std::filesystem::path object_path;
+  bool io_failed;
+  int fd;
+
+  int open() noexcept;
+  int close() noexcept;
+  void cleanup() noexcept;
+
  public:
   SFSAtomicWriter(
       const DoutPrefixProvider* _dpp, optional_yield _y,
@@ -45,7 +54,7 @@ class SFSAtomicWriter : public StoreWriter {
       const rgw_user& _owner, const rgw_placement_rule* _ptail_placement_rule,
       uint64_t _olh_epoch, const std::string& _unique_tag
   );
-  ~SFSAtomicWriter() = default;
+  ~SFSAtomicWriter();
 
   virtual int prepare(optional_yield y) override;
   virtual int process(bufferlist&& data, uint64_t offset) override;
