@@ -196,7 +196,7 @@ TEST_F(TestSFSSQLiteBuckets, ListBucketsIDs) {
   EXPECT_TRUE(fs::exists(getDBFullPath()));
 
   auto buckets_ids = db_buckets->get_bucket_ids();
-  EXPECT_EQ(buckets_ids.size(), 3);
+  EXPECT_EQ(buckets_ids.size(), 2);
   EXPECT_EQ(buckets_ids[0], "test1");
   EXPECT_EQ(buckets_ids[1], "test2");
   EXPECT_EQ(buckets_ids[2], "test3");
