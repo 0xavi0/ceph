@@ -68,6 +68,13 @@ class SFSBucket : public Bucket {
                       ListResults &results,
                       optional_yield y);
 
+  bool check_add_common_prefix(const DoutPrefixProvider *dpp,
+                                const std::string & object_name,
+                                ListParams &params,
+                                int max,
+                                ListResults &results,
+                                optional_yield y);
+
  public:
   SFSBucket(SFStore *_store, sfs::BucketRef _bucket);
   SFSBucket& operator=(const SFSBucket&) = delete;
