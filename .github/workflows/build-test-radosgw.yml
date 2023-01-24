@@ -99,7 +99,8 @@ jobs:
             -p 7480:7480 \
             quay.io/s3gw/run-radosgw \
               --rgw-backend-store sfs \
-              --debug-rgw 1)
+              --debug-rgw 1 \
+              --rgw-lc-debug-interval 10)
 
           wait_for_http_200 "http://127.0.0.1:7480"
 

@@ -20,6 +20,7 @@
 
 #include "buckets/bucket_definitions.h"
 #include "common/ceph_mutex.h"
+#include "lifecycle/lifecycle_definitions.h"
 #include "objects/object_definitions.h"
 #include "sqlite_orm.h"
 #include "users/users_definitions.h"
@@ -34,6 +35,8 @@ constexpr std::string_view BUCKETS_TABLE = "buckets";
 constexpr std::string_view OBJECTS_TABLE = "objects";
 constexpr std::string_view VERSIONED_OBJECTS_TABLE = "versioned_objects";
 constexpr std::string_view ACCESS_KEYS = "access_keys";
+constexpr std::string_view LC_HEAD_TABLE = "lc_head";
+constexpr std::string_view LC_ENTRIES_TABLE = "lc_entries";
 
 class sqlite_sync_exception : public std::exception {
   std::string _message;
@@ -155,6 +158,24 @@ inline auto _make_storage(const std::string& path) {
           sqlite_orm::make_column("user_id", &DBAccessKey::user_id),
           sqlite_orm::foreign_key(&DBAccessKey::user_id)
               .references(&DBUser::user_id)
+      ),
+      sqlite_orm::make_table(
+          std::string(LC_HEAD_TABLE),
+          sqlite_orm::make_column(
+              "lc_index", &DBOPLCHead::lc_index, sqlite_orm::primary_key()
+          ),
+          sqlite_orm::make_column("marker", &DBOPLCHead::marker),
+          sqlite_orm::make_column("start_date", &DBOPLCHead::start_date)
+      ),
+      sqlite_orm::make_table(
+          std::string(LC_ENTRIES_TABLE),
+          sqlite_orm::make_column("lc_index", &DBOPLCEntry::lc_index),
+          sqlite_orm::make_column("bucket_name", &DBOPLCEntry::bucket_name),
+          sqlite_orm::make_column("start_time", &DBOPLCEntry::start_time),
+          sqlite_orm::make_column("status", &DBOPLCEntry::status),
+          sqlite_orm::primary_key(
+              &DBOPLCEntry::lc_index, &DBOPLCEntry::bucket_name
+          )
       )
   );
 }

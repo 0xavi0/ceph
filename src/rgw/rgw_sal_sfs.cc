@@ -28,6 +28,7 @@
 #include "common/errno.h"
 #include "driver/sfs/notification.h"
 #include "driver/sfs/sfs_gc.h"
+#include "driver/sfs/sfs_lc.h"
 #include "driver/sfs/sqlite/dbconn.h"
 #include "driver/sfs/writer.h"
 #include "include/util.h"
@@ -64,12 +65,10 @@ namespace rgw::sal {
 
 // Lifecycle {{{
 std::unique_ptr<Lifecycle> SFStore::get_lifecycle(void) {
-  ldout(ctx(), 10) << __func__ << ": TODO" << dendl;
-  return nullptr;
+  return std::make_unique<sfs::SFSLifecycle>(this);
 }
 RGWLC* SFStore::get_rgwlc(void) {
-  ldout(ctx(), 10) << __func__ << ": TODO" << dendl;
-  return nullptr;
+  return lc;
 }
 
 // }}}
@@ -466,6 +465,9 @@ http::status SFSStatusPage::render(std::ostream& os) {
 int SFStore::initialize(CephContext* cct, const DoutPrefixProvider* dpp) {
   ldpp_dout(dpp, 10) << __func__ << dendl;
   gc->initialize();
+  lc = new RGWLC();
+  lc->initialize(cct, this);
+  lc->start_processor();
   return 0;
 }
 

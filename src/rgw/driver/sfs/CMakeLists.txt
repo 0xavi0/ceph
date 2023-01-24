@@ -21,6 +21,7 @@ set(sfs_srcs
     sqlite/sqlite_buckets.cc
     sqlite/sqlite_objects.cc
     sqlite/sqlite_versioned_objects.cc
+    sqlite/sqlite_lifecycle.cc
     sqlite/users/users_conversions.cc
     sqlite/buckets/bucket_conversions.cc
     sqlite/objects/object_conversions.cc
@@ -36,6 +37,7 @@ set(sfs_srcs
     sfs_bucket.cc
     sfs_gc.cc
     sfs_user.cc
+    sfs_lc.cc
     )
 
 add_library(sfs STATIC ${sfs_srcs})

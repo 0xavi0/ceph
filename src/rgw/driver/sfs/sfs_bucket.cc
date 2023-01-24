@@ -28,11 +28,18 @@ int SFStore::set_buckets_enabled(
 }
 
 int SFStore::get_bucket(
-    User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket
+    User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* result
 ) {
-  // TODO implement get_bucket by RGWBucketInfo
-  ldout(ctx(), 10) << __func__ << ": TODO get_bucket by RGWBucketInfo" << dendl;
-  return -ENOTSUP;
+  std::lock_guard l(buckets_map_lock);
+  auto it = buckets.find(i.bucket.name);
+  if (it == buckets.end()) {
+    return -ENOENT;
+  }
+  auto bucketref = it->second;
+
+  auto bucket = make_unique<SFSBucket>(this, bucketref);
+  result->reset(bucket.release());
+  return 0;
 }
 
 int SFStore::get_bucket(

@@ -265,6 +265,14 @@ int SFSBucket::merge_and_store_attrs(
       acls.decode(lval);
     }
   }
+  for (auto& it : attrs) {
+    auto it_find = new_attrs.find(it.first);
+    if (it_find == new_attrs.end()) {
+      // this is an old attr that is not defined in the new_attrs
+      // delete it
+      attrs.erase(it.first);
+    }
+  }
 
   sfs::get_meta_buckets(get_store().db_conn)
       ->store_bucket(sfs::sqlite::DBOPBucketInfo(get_info(), get_attrs()));

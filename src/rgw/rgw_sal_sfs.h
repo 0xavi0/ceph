@@ -115,6 +115,7 @@ class SFStore : public StoreDriver {
   CephContext* const cctx;
   ceph::mutex buckets_map_lock = ceph::make_mutex("buckets_map_lock");
   std::map<std::string, sfs::BucketRef> buckets;
+  RGWLC* lc = nullptr;
 
   // Signal shutdown condition to service threads
   bool shutdown;
