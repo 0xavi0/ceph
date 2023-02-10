@@ -33,6 +33,8 @@ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
+    auto test_dir = fs::temp_directory_path() / TEST_DIR;
+    std::cout << "Setup: temp directory: " << test_dir.string() << std::endl;
   }
 
   void TearDown() override {
@@ -56,6 +58,10 @@ protected:
   }
 
   std::size_t getStoreNbFiles() {
+
+    std::string command = "ls -la " + getTestDir();
+    std::cout << "Running command: " << command << std::endl;
+    system(command.c_str());
     using std::filesystem::recursive_directory_iterator;
     using fp = bool (*)( const std::filesystem::path&);
     return std::count_if(recursive_directory_iterator(getTestDir()), recursive_directory_iterator{}, (fp)std::filesystem::is_regular_file);
