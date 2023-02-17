@@ -1,0 +1,19 @@
+fail_fast: false
+files: >-
+  (?x)^(
+    src/rgw/driver/sfs/.*|
+    src/rgw/driver/simplefile/.*|
+    src/rgw/rgw_sal_sfs\.(h|cc)|
+    src/rgw/rgw_status_(page|frontend)\.(h|cc)|
+    src/rgw/rgw_sal_simplefile\.(h|cc)
+  )$
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v15.0.7
+    hooks:
+      - id: clang-format
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: mixed-line-ending
