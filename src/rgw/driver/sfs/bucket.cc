@@ -18,6 +18,7 @@
 #include "driver/sfs/multipart.h"
 #include "driver/sfs/object.h"
 #include "driver/sfs/sqlite/sqlite_versioned_objects.h"
+#include "driver/sfs/types.h"
 #include "rgw_sal_sfs.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -52,16 +53,16 @@ std::unique_ptr<Object> SFSBucket::get_object(const rgw_obj_key& key) {
 
   ldout(store->ceph_context(), 10)
       << "bucket::" << __func__ << ": key" << key << dendl;
-  std::lock_guard l(bucket->obj_map_lock);
-  auto it = bucket->objects.find(key.name);
-  if (it == bucket->objects.end()) {
+  try {
+    auto objref = bucket->get(key.name);
+    return _get_object(objref);
+  } catch (const sfs::UnknownObjectException& _) {
     ldout(store->ceph_context(), 10)
         << "unable to find key " << key << " in bucket " << bucket->get_name()
         << dendl;
     // possibly a copy, return a placeholder
     return make_unique<SFSObject>(this->store, key, this, bucket);
   }
-  return _get_object(it->second);
 }
 
 /**
@@ -76,27 +77,25 @@ int SFSBucket::list(
   if (params.list_versions) {
     return list_versions(dpp, params, max, results, y);
   }
-
-  std::lock_guard l(bucket->obj_map_lock);
   sfs::sqlite::SQLiteVersionedObjects db_versioned_objects(store->db_conn);
   auto use_prefix = !params.prefix.empty();
-  for (const auto& [name, objref] : bucket->objects) {
-    if (use_prefix && name.rfind(params.prefix, 0) != 0) continue;
-    lsfs_dout(dpp, 10) << "object: " << name << dendl;
+  for (const auto& objref : bucket->get_all()) {
+    if (use_prefix && objref->name.rfind(params.prefix, 0) != 0) continue;
+    lsfs_dout(dpp, 10) << "object: " << objref->name << dendl;
 
     auto last_version =
         db_versioned_objects.get_last_versioned_object(objref->path.get_uuid());
     if (last_version->object_state == rgw::sal::ObjectState::COMMITTED) {
       // check for delimiter
-      if (check_add_common_prefix(dpp, name, params, 0, results, y)) {
+      if (check_add_common_prefix(dpp, objref->name, params, 0, results, y)) {
         continue;
       }
       auto obj = _get_object(objref);
       rgw_bucket_dir_entry dirent;
-      dirent.key = cls_rgw_obj_key(name, objref->instance);
+      dirent.key = cls_rgw_obj_key(objref->name, objref->instance);
       dirent.meta.accounted_size = obj->get_obj_size();
       dirent.meta.mtime = obj->get_mtime();
-      dirent.meta.etag = objref->meta.etag;
+      dirent.meta.etag = objref->get_meta().etag;
       dirent.meta.owner_display_name = bucket->get_owner().display_name;
       dirent.meta.owner = bucket->get_owner().user_id.id;
       results.objs.push_back(dirent);
@@ -111,13 +110,12 @@ int SFSBucket::list_versions(
     const DoutPrefixProvider* dpp, ListParams& params, int,
     ListResults& results, optional_yield y
 ) {
-  std::lock_guard l(bucket->obj_map_lock);
   auto use_prefix = !params.prefix.empty();
-  for (const auto& [name, objref] : bucket->objects) {
-    if (use_prefix && name.rfind(params.prefix, 0) != 0) continue;
-    lsfs_dout(dpp, 10) << "object: " << name << dendl;
+  for (const auto& objref : bucket->get_all()) {
+    if (use_prefix && objref->name.rfind(params.prefix, 0) != 0) continue;
+    lsfs_dout(dpp, 10) << "object: " << objref->name << dendl;
     // check for delimiter
-    if (check_add_common_prefix(dpp, name, params, 0, results, y)) {
+    if (check_add_common_prefix(dpp, objref->name, params, 0, results, y)) {
       continue;
     }
     // get all available versions from db
@@ -173,7 +171,6 @@ int SFSBucket::remove_bucket(
     const DoutPrefixProvider* dpp, bool delete_children, bool forward_to_master,
     req_info* req_info, optional_yield y
 ) {
-  std::lock_guard l(bucket->obj_map_lock);
   if (!delete_children) {
     if (check_empty(dpp, y)) {
       return -ENOENT;

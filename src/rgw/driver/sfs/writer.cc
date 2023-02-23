@@ -120,13 +120,14 @@ int SFSAtomicWriter::complete(
                      << ", if_nomatch: " << if_nomatch << dendl;
 
   ceph_assert(bytes_written == accounted_size);
-
-  sfs::Object::Meta& meta = objref->meta;
-  meta.size = accounted_size;
-  meta.etag = etag;
-  meta.mtime = ceph::real_clock::now();
-  meta.set_mtime = set_mtime;
-  meta.delete_at = delete_at;
+  const auto now = ceph::real_clock::now();
+  objref->update_meta(
+      {.size = accounted_size,
+       .etag = etag,
+       .mtime = now,
+       .set_mtime = set_mtime,
+       .delete_at = delete_at}
+  );
 
   // for object-locking enabled buckets, set the bucket's object-locking
   // profile when not defined on the object itself
@@ -135,7 +136,7 @@ int SFSAtomicWriter::complete(
     auto iter = attrs.find(RGW_ATTR_OBJECT_RETENTION);
     if (iter == attrs.end()) {
       real_time lock_until_date =
-          bucketref->get_info().obj_lock.get_lock_until_date(meta.mtime);
+          bucketref->get_info().obj_lock.get_lock_until_date(now);
       string mode = bucketref->get_info().obj_lock.get_mode();
       RGWObjectRetention obj_retention(mode, lock_until_date);
       bufferlist bl;
@@ -144,11 +145,10 @@ int SFSAtomicWriter::complete(
     }
   }
 
-  meta.attrs = attrs;
-  bucketref->finish(dpp, obj.get_name());
+  objref->update_attrs(attrs);
 
   if (mtime != nullptr) {
-    *mtime = meta.mtime;
+    *mtime = now;
   }
 
   objref->metadata_finish(store);
