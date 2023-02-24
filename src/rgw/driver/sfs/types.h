@@ -81,7 +81,16 @@ class Object {
       const rgw_obj_key& key, SFStore* store, const std::string& bucket_id
   );
   static Object* create_commit_new_object(
-      const rgw_obj_key& key, SFStore* store, const std::string& bucket_id
+      const rgw_obj_key& key, SFStore* store, const std::string& bucket_id,
+      const std::string* version_id
+  );
+
+  static Object* try_create_with_last_version_from_database_fetch(
+      SFStore* store, const std::string& name, const std::string& bucket_id
+  );
+  static Object* try_create_from_database_fetch(
+      SFStore* store, const std::string& name, const std::string& bucket_id,
+      const std::string& version_id
   );
 
   const Meta get_meta() const;
@@ -96,8 +105,8 @@ class Object {
 
   std::filesystem::path get_storage_path() const;
 
-  // Add new object version. Sets version_id to the one created
-  void add_new_version(SFStore* store);
+  // Update version and commit to database
+  void update_commit_new_version(SFStore* store, const std::string& version_id);
 
   // Change obj version state.
   // Use this for example to update objs to in flight states like
@@ -291,8 +300,6 @@ class Bucket {
   RGWBucketInfo info;
   rgw::sal::Attrs attrs;
   bool deleted{false};
-  std::map<std::string, ObjectRef> objects;
-  ceph::mutex obj_map_lock = ceph::make_mutex("obj_map_lock");
 
  public:
   ceph::mutex multipart_map_lock = ceph::make_mutex("multipart_map_lock");
@@ -301,8 +308,6 @@ class Bucket {
   Bucket(const Bucket&) = delete;
 
  private:
-  std::optional<ObjectRef> get_from_db(const std::string& name);
-  void _refresh_objects();
   void _undelete_object(
       ObjectRef objref, const rgw_obj_key& key,
       sqlite::SQLiteVersionedObjects& sqlite_versioned_objects,
@@ -318,9 +323,7 @@ class Bucket {
         store(_store),
         owner(_owner),
         info(_bucket_info),
-        attrs(_attrs) {
-    _refresh_objects();
-  }
+        attrs(_attrs) {}
 
   const RGWBucketInfo& get_info() const { return info; }
 
@@ -349,7 +352,7 @@ class Bucket {
   uint32_t get_flags() const { return info.flags; }
 
  private:
-  bool want_new_version(const rgw_obj_key& key, ObjectRef obj);
+  bool want_specific_version(const rgw_obj_key& key);
 
  public:
   // Return object ref for key
@@ -400,7 +403,6 @@ class Bucket {
   }
 
   void finish_multipart(const std::string& upload_id, ObjectRef objref) {
-    std::lock_guard l1(obj_map_lock);
     std::lock_guard l2(multipart_map_lock);
 
     auto it = multiparts.find(upload_id);
