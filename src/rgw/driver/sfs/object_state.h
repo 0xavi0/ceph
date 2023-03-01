@@ -18,7 +18,6 @@ namespace rgw::sal {
 
 enum class ObjectState {
   OPEN = 0,
-  WRITING,
   COMMITTED,
   LOCKED,
   DELETED,
