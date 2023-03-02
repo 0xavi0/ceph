@@ -141,6 +141,7 @@ protected:
     db_version.id = version;
     db_version.object_id = object->path.get_uuid();
     db_version.object_state = rgw::sal::ObjectState::COMMITTED;
+    db_version.version_id = std::to_string(version);
     db_versioned_objects.insert_versioned_object(db_version);
   }
 
@@ -152,6 +153,8 @@ protected:
                                                        object->path.get_uuid());
     ASSERT_TRUE(last_version.has_value());
     last_version->object_state = rgw::sal::ObjectState::DELETED;
+    last_version->version_id.append("_next_");
+    last_version->version_id.append(std::to_string(last_version->id));
     db_versioned_objects.insert_versioned_object(*last_version);
   }
 

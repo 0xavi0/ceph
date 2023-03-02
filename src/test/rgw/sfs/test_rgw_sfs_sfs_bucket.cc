@@ -94,6 +94,7 @@ protected:
     db_version.id = version;
     db_version.object_id = object->path.get_uuid();
     db_version.object_state = rgw::sal::ObjectState::COMMITTED;
+    db_version.version_id = std::to_string(version);
     db_versioned_objects.insert_versioned_object(db_version);
   }
 };
@@ -143,7 +144,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
-  
+
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
   env.init(ceph_context.get());
@@ -157,13 +158,13 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
   std::string arg_swift_ver_location;
   RGWQuotaInfo arg_quota_info;
   RGWAccessControlPolicy arg_aclp = get_aclp_default();
-  rgw::sal::Attrs arg_attrs; 
+  rgw::sal::Attrs arg_attrs;
   {
     bufferlist acl_bl;
     arg_aclp.encode(acl_bl);
     arg_attrs[RGW_ATTR_ACL] = acl_bl;
   }
-  
+
   RGWBucketInfo arg_info = get_binfo();
   obj_version arg_objv;
   bool existed = false;
@@ -187,7 +188,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
                                 arg_req_info,               //req_info
                                 &bucket_from_create,        //bucket
                                 null_yield                  //optional_yield
-                                ), 
+                                ),
             0);
 
   EXPECT_EQ(existed, false);
@@ -196,7 +197,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
   EXPECT_EQ(bucket_from_create->get_placement_rule().name, "default");
   EXPECT_EQ(bucket_from_create->get_placement_rule().storage_class, "STANDARD");
   EXPECT_NE(bucket_from_create->get_attrs().find(RGW_ATTR_ACL), bucket_from_create->get_attrs().end());
-  
+
   EXPECT_FALSE(arg_info.flags & BUCKET_VERSIONED);
   EXPECT_FALSE(arg_info.flags & BUCKET_OBJ_LOCK_ENABLED);
 
@@ -209,7 +210,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
   }
 
   EXPECT_EQ(bucket_from_create->get_acl(), arg_aclp);
-  
+
   //@warning this triggers segfault
   //EXPECT_EQ(bucket_from_create->get_owner()->get_id().id, "usr_id");
 
@@ -219,7 +220,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
-  
+
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
   env.init(ceph_context.get());
@@ -233,13 +234,13 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
   std::string arg_swift_ver_location;
   RGWQuotaInfo arg_quota_info;
   RGWAccessControlPolicy arg_aclp = get_aclp_default();
-  rgw::sal::Attrs arg_attrs; 
+  rgw::sal::Attrs arg_attrs;
   {
     bufferlist acl_bl;
     arg_aclp.encode(acl_bl);
     arg_attrs[RGW_ATTR_ACL] = acl_bl;
   }
-  
+
   RGWBucketInfo arg_info = get_binfo();
   obj_version arg_objv;
   bool existed = false;
@@ -263,21 +264,21 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
                                 arg_req_info,               //req_info
                                 &bucket_from_create,        //bucket
                                 null_yield                  //optional_yield
-                                ), 
+                                ),
             0);
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
   EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(), 
+                              user.get(),
                               arg_info.bucket,
                               &bucket_from_store,
-                              null_yield), 
+                              null_yield),
             0);
 
   EXPECT_EQ(*bucket_from_store, *bucket_from_create);
   EXPECT_NE(bucket_from_store->get_attrs().find(RGW_ATTR_ACL), bucket_from_store->get_attrs().end());
-  
+
   auto acl_bl_it = bucket_from_store->get_attrs().find(RGW_ATTR_ACL);
   {
     RGWAccessControlPolicy aclp;
@@ -293,7 +294,7 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
-  
+
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
   env.init(ceph_context.get());
@@ -307,13 +308,13 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
   std::string arg_swift_ver_location;
   RGWQuotaInfo arg_quota_info;
   RGWAccessControlPolicy arg_aclp = get_aclp_default();
-  rgw::sal::Attrs arg_attrs; 
+  rgw::sal::Attrs arg_attrs;
   {
     bufferlist acl_bl;
     arg_aclp.encode(acl_bl);
     arg_attrs[RGW_ATTR_ACL] = acl_bl;
   }
-  
+
   RGWBucketInfo arg_info = get_binfo();
   obj_version arg_objv;
   bool existed = false;
@@ -337,16 +338,16 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
                                 arg_req_info,               //req_info
                                 &bucket_from_create,        //bucket
                                 null_yield                  //optional_yield
-                                ), 
+                                ),
             0);
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
   EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(), 
+                              user.get(),
                               arg_info.bucket,
                               &bucket_from_store,
-                              null_yield), 
+                              null_yield),
             0);
 
   RGWAccessControlPolicy arg_aclp_1 = get_aclp_1();
@@ -362,10 +363,10 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store_1;
 
   EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(), 
+                            user.get(),
                             arg_info.bucket,
                             &bucket_from_store_1,
-                            null_yield), 
+                            null_yield),
           0);
 
   EXPECT_EQ(bucket_from_store->get_acl(), bucket_from_store_1->get_acl());
@@ -375,7 +376,7 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
-  
+
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
   env.init(ceph_context.get());
@@ -389,13 +390,13 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
   std::string arg_swift_ver_location;
   RGWQuotaInfo arg_quota_info;
   RGWAccessControlPolicy arg_aclp = get_aclp_default();
-  rgw::sal::Attrs arg_attrs; 
+  rgw::sal::Attrs arg_attrs;
   {
     bufferlist acl_bl;
     arg_aclp.encode(acl_bl);
     arg_attrs[RGW_ATTR_ACL] = acl_bl;
   }
-  
+
   RGWBucketInfo arg_info = get_binfo();
   obj_version arg_objv;
   bool existed = false;
@@ -419,16 +420,16 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
                                 arg_req_info,               //req_info
                                 &bucket_from_create,        //bucket
                                 null_yield                  //optional_yield
-                                ), 
+                                ),
             0);
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
   EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(), 
+                              user.get(),
                               arg_info.bucket,
                               &bucket_from_store,
-                              null_yield), 
+                              null_yield),
             0);
 
   rgw::sal::Attrs new_attrs;
@@ -451,10 +452,10 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store_1;
 
   EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(), 
+                            user.get(),
                             arg_info.bucket,
                             &bucket_from_store_1,
-                            null_yield), 
+                            null_yield),
           0);
 
   EXPECT_EQ(bucket_from_store_1->get_attrs(), new_attrs);

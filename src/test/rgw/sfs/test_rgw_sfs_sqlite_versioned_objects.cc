@@ -357,11 +357,13 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
   ASSERT_TRUE(ret_ver_object.has_value());
   compareVersionedObjects(versioned_object, *ret_ver_object);
 
-  // update the size
+  // update the size, add new version
   auto original_size = versioned_object.size;
-  versioned_object.size = 1999;
-  //versioned_object.id = 2;
-  db_versioned_objects->insert_versioned_object(versioned_object);
+  auto new_versioned = versioned_object;
+  new_versioned.size = 1999;
+  new_versioned.id = 2;
+  new_versioned.version_id = "2";
+  db_versioned_objects->insert_versioned_object(new_versioned);
 
   // get the first version
   ret_ver_object = db_versioned_objects->get_versioned_object(versioned_object.id);
@@ -382,9 +384,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
   ret_ver_object = db_versioned_objects->get_versioned_object(2);
   ASSERT_TRUE(ret_ver_object.has_value());
   ASSERT_EQ(1999, ret_ver_object->size);
-  versioned_object.id = 2;
-  versioned_object.size = 1999;
-  compareVersionedObjects(versioned_object, *ret_ver_object);
+  compareVersionedObjects(new_versioned, *ret_ver_object);
 }
 
 TEST_F(TestSFSSQLiteVersionedObjects, GetExisting) {
@@ -543,9 +543,11 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
   // just update the size
   auto original_size = object.size;
   object.size = 1;
+  object.version_id = "test_version_id_2";
   db_versioned_objects->insert_versioned_object(object);
 
   // change nothing, but it should also create a new version
+  object.version_id = "test_version_id_3";
   db_versioned_objects->insert_versioned_object(object);
   auto ids = db_versioned_objects->get_versioned_object_ids();
   ASSERT_EQ(3, ids.size());
@@ -557,18 +559,21 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
   ASSERT_TRUE(ret_object.has_value());
   object.size = original_size;
   object.id = 1;
+  object.version_id = "test_version_id_1";
   compareVersionedObjects(object, *ret_object);
 
   ret_object = db_versioned_objects->get_versioned_object(2);
   ASSERT_TRUE(ret_object.has_value());
   object.size = 1;
   object.id = 2;
+  object.version_id = "test_version_id_2";
   compareVersionedObjects(object, *ret_object);
 
   ret_object = db_versioned_objects->get_versioned_object(3);
   ASSERT_TRUE(ret_object.has_value());
   object.size = 1;
   object.id = 3;
+  object.version_id = "test_version_id_3";
   compareVersionedObjects(object, *ret_object);
 }
 
@@ -598,6 +603,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
 
   // just update the size, and add a new version
   object.size = 1999;
+  object.version_id = "test_version_id_2";
   db_versioned_objects->insert_versioned_object(object);
 
   // now it should return the last one
@@ -629,27 +635,34 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestInsertIncreaseID) {
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
   EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_2";
   EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_3";
   EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_4";
   EXPECT_EQ(4, db_versioned_objects->insert_versioned_object(object));
 
   auto ret_ver_object = db_versioned_objects->get_versioned_object(1);
   ASSERT_TRUE(ret_ver_object.has_value());
+  object.version_id = "test_version_id_1";
   compareVersionedObjects(object, *ret_ver_object);
 
   ret_ver_object = db_versioned_objects->get_versioned_object(2);
   ASSERT_TRUE(ret_ver_object.has_value());
   object.id = 2;
+  object.version_id = "test_version_id_2";
   compareVersionedObjects(object, *ret_ver_object);
 
   ret_ver_object = db_versioned_objects->get_versioned_object(3);
   ASSERT_TRUE(ret_ver_object.has_value());
   object.id = 3;
+  object.version_id = "test_version_id_3";
   compareVersionedObjects(object, *ret_ver_object);
 
   ret_ver_object = db_versioned_objects->get_versioned_object(4);
   ASSERT_TRUE(ret_ver_object.has_value());
   object.id = 4;
+  object.version_id = "test_version_id_4";
   compareVersionedObjects(object, *ret_ver_object);
 
   ret_ver_object = db_versioned_objects->get_versioned_object(5);
