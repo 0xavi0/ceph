@@ -55,6 +55,16 @@ inline auto _make_storage(const std::string& path) {
           "versioned_object_objid_vid_unique", &DBVersionedObject::object_id,
           &DBVersionedObject::version_id
       ),
+      sqlite_orm::make_index("bucket_ownerid_idx", &DBBucket::owner_id),
+      sqlite_orm::make_index("bucket_name_idx", &DBBucket::bucket_name),
+      sqlite_orm::make_index("objects_bucketid_idx", &DBObject::bucket_id),
+      sqlite_orm::make_index("objects_bucketid_idx", &DBObject::bucket_id),
+      sqlite_orm::make_index(
+          "vobjs_versionid_idx", &DBVersionedObject::version_id
+      ),
+      sqlite_orm::make_index(
+          "vobjs_object_id_idx", &DBVersionedObject::object_id
+      ),
       sqlite_orm::make_table(
           std::string(USERS_TABLE),
           sqlite_orm::make_column(
