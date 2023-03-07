@@ -332,11 +332,8 @@ void MultipartUpload::abort(const DoutPrefixProvider* dpp) {
   objref.reset();
 }
 
-bool Bucket::want_specific_version(const rgw_obj_key& key) {
-  return !key.instance.empty();
-}
-
 ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
+  const bool wants_specific_version = !key.instance.empty();
   ObjectRef result;
 
   auto maybe_result = Object::try_create_with_last_version_fetch_from_database(
@@ -351,10 +348,10 @@ ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
   }
 
   // an object exists with at least 1 version
-  if (want_specific_version(key) && maybe_result->instance == key.instance) {
+  if (wants_specific_version && maybe_result->instance == key.instance) {
     // requested version happens to be the last version
     result.reset(maybe_result);
-  } else if (want_specific_version(key) && maybe_result->instance != key.instance) {
+  } else if (wants_specific_version && maybe_result->instance != key.instance) {
     // requested version is not last
 
     auto specific_version_object = Object::try_create_fetch_from_database(

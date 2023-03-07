@@ -86,7 +86,8 @@ class Object {
   );
 
   static Object* try_create_with_last_version_fetch_from_database(
-      SFStore* store, const std::string& name, const std::string& bucket_id);
+      SFStore* store, const std::string& name, const std::string& bucket_id
+  );
   static Object* try_create_fetch_from_database(
       SFStore* store, const std::string& name, const std::string& bucket_id,
       const std::string& version_id
@@ -351,9 +352,6 @@ class Bucket {
   rgw_placement_rule& get_placement_rule() { return info.placement_rule; }
 
   uint32_t get_flags() const { return info.flags; }
-
- private:
-  bool want_specific_version(const rgw_obj_key& key);
 
  public:
   /// Return object for key. Do everything necessary to retrieve or
