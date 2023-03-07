@@ -93,7 +93,8 @@ Object* Object::create_commit_new_object(
   oinfo.bucket_id = bucket_id;
   oinfo.name = result->name;
 
-  // TODO(irq0) make object and version insert a transaction
+  // TODO(https://github.com/aquarist-labs/s3gw/issues/378) make
+  // object and version insert a transaction
   sqlite::SQLiteObjects dbobjs(store->db_conn);
   dbobjs.store_object(oinfo);
 

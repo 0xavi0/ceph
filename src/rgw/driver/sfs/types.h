@@ -105,26 +105,28 @@ class Object {
 
   std::filesystem::path get_storage_path() const;
 
-  // Update version and commit to database
+  /// Update version and commit to database
   void update_commit_new_version(SFStore* store, const std::string& version_id);
 
-  // Change obj version state.
+  /// Change obj version state.
   // Use this for example to update objs to in flight states like
   // WRITING.
   // Special case: DELETED sets this to deleted
   // and commits a deletion time
   void metadata_change_version_state(SFStore* store, ObjectState state);
 
-  // Commit all object state to database
+  /// Commit all object state to database
   // Including meta and attrs
   // Sets obj version state to COMMITTED
   void metadata_finish(SFStore* store);
 
-  // Commit attrs to database
+  /// Commit attrs to database
   void metadata_flush_attrs(SFStore* store);
 
   int delete_object_version(SFStore* store) const;
   void delete_object_metadata(SFStore* store) const;
+  /// Delete object _data_ (e.g payload of PUT operations) from disk.
+  // Set all=true to delete all versions, not just this version.
   void delete_object_data(SFStore* store, bool all) const;
 };
 
@@ -355,30 +357,20 @@ class Bucket {
   bool want_specific_version(const rgw_obj_key& key);
 
  public:
-  // Return object ref for key
-  // Object does not need to not exist
-  // if it doesn't it will be created, added to cache
-  // if it does
-  //  we return that
-  // if key.instance is not empty and instance != stored instance
-  //  we create additionally a new version
+  /// Return object for key. Do everything necessary to retrieve or
+  // create this object including object version.
   ObjectRef get_or_create(const rgw_obj_key& key);
 
-  // Get object from cache (with/without mutex).
-  // Caller is expected to take obj_map_lock
-  ObjectRef get_unmutexed(const std::string& name);
+  /// Get existing object by name. Throws if it doesn't exist.
   ObjectRef get(const std::string& name);
-  // Get copy of all object in cache
+  /// Get copy of all objects
   std::vector<ObjectRef> get_all();
 
-  // S3 delete object operation: deletes a version
-  // or creates a deleted tombstone
-  // Updates cached object to deleted version
+  /// S3 delete object operation: delete version or create tombstone.
   void delete_object(ObjectRef objref, const rgw_obj_key& key);
 
-  // Delete a non existing object
-  // creates object in database and cache
-  // toumbstone version that object
+  /// Delete a non-existing object. Creates object with toumbstone
+  // version in database.
   std::string create_non_existing_object_delete_marker(const rgw_obj_key& key);
 
   MultipartUploadRef get_multipart(
