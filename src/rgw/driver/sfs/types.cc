@@ -379,7 +379,7 @@ ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
   return result;
 }
 
-ObjectRef Bucket::get_unmutexed(const std::string& name) {
+ObjectRef Bucket::get(const std::string& name) {
   auto maybe_result = Object::try_create_with_last_version_from_database_fetch(
       store, name, info.bucket.bucket_id
   );
@@ -388,10 +388,6 @@ ObjectRef Bucket::get_unmutexed(const std::string& name) {
     throw UnknownObjectException();
   }
   return std::shared_ptr<Object>(maybe_result);
-}
-
-ObjectRef Bucket::get(const std::string& name) {
-  return get_unmutexed(name);
 }
 
 std::vector<ObjectRef> Bucket::get_all() {

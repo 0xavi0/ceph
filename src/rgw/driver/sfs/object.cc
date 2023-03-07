@@ -441,7 +441,7 @@ void SFSObject::refresh_meta() {
     bucketref = store->get_bucket_ref(bucket->get_name());
   }
   try {
-    objref = bucketref->get_unmutexed(get_name());
+    objref = bucketref->get(get_name());
   } catch (sfs::UnknownObjectException& e) {
     // object probably not created yet?
     return;
