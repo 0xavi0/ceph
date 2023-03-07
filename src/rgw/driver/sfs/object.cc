@@ -290,7 +290,7 @@ int SFSObject::set_obj_attrs(
     optional_yield y
 ) {
   ceph_assert(objref);
-  auto meta = objref->meta;
+  auto& meta = objref->meta;
   map<string, bufferlist>::iterator iter;
 
   if (delattrs) {
@@ -324,7 +324,7 @@ int SFSObject::modify_obj_attrs(
     return 0;
   }
   ceph_assert(objref);
-  auto meta = objref->meta;
+  auto& meta = objref->meta;
   meta.attrs[attr_name] = attr_val;
 
   //synch attrs caches
@@ -342,7 +342,7 @@ int SFSObject::delete_obj_attrs(
     return 0;
   }
   ceph_assert(objref);
-  auto meta = objref->meta;
+  auto& meta = objref->meta;
   if (meta.attrs.erase(attr_name)) {
     //synch attrs caches
     state.attrset = meta.attrs;
@@ -467,7 +467,7 @@ void SFSObject::_refresh_meta_from_object() {
   } else {
     set_obj_size(objref->meta.size);
   }
-  auto meta = objref->meta;
+  auto& meta = objref->meta;
   set_attrs(meta.attrs);
   state.mtime = meta.mtime;
 }
