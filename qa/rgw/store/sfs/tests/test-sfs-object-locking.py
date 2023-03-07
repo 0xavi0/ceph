@@ -29,6 +29,10 @@ class ObjectLockingTests(unittest.TestCase):
     URL = "http://127.0.0.1:7480"
 
     BUCKET_NAME_1 = "bobjlockenabled1"
+    BUCKET_NAME_2 = "bobjlockenabled2"
+    BUCKET_NAME_3 = "bobjlockenabled3"
+    BUCKET_NAME_4 = "bobjlockenabled4"
+    BUCKET_NAME_5 = "bobjlockenabled5"
 
     ObjVersions = {}
 
@@ -94,12 +98,12 @@ class ObjectLockingTests(unittest.TestCase):
         self.assertTrue(checkDate.day == againstDate.day)
 
     def test_object_locking_bucket_object_lock_default_configuration(self):
-        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_1, True)
+        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_2, True)
 
         # set GOVERNANCE DefaultRetention over bucket
 
         self.s3_client.put_object_lock_configuration(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_2,
             ObjectLockConfiguration={
                 "ObjectLockEnabled": "Enabled",
                 "Rule": {"DefaultRetention": {"Mode": "GOVERNANCE", "Days": 7}},
@@ -107,7 +111,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.get_object_lock_configuration(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1
+            Bucket=ObjectLockingTests.BUCKET_NAME_2
         )
         self.assertTrue(
             response["ObjectLockConfiguration"]["ObjectLockEnabled"] == "Enabled"
@@ -121,11 +125,11 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Key="key.1", Body="data.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_2, Key="key.1", Body="data.1"
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_2, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -134,7 +138,7 @@ class ObjectLockingTests(unittest.TestCase):
                 print(self.ObjVersions["key.1.1"])
 
         response = self.s3_client.get_object_retention(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_2,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.1"],
         )
@@ -144,7 +148,7 @@ class ObjectLockingTests(unittest.TestCase):
         # set COMPLIANCE DefaultRetention over bucket
 
         self.s3_client.put_object_lock_configuration(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_2,
             ObjectLockConfiguration={
                 "ObjectLockEnabled": "Enabled",
                 "Rule": {"DefaultRetention": {"Mode": "COMPLIANCE", "Years": 1}},
@@ -152,7 +156,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.get_object_lock_configuration(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1
+            Bucket=ObjectLockingTests.BUCKET_NAME_2
         )
         self.assertTrue(
             response["ObjectLockConfiguration"]["ObjectLockEnabled"] == "Enabled"
@@ -167,11 +171,11 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Key="key.1", Body="data.2"
+            Bucket=ObjectLockingTests.BUCKET_NAME_2, Key="key.1", Body="data.2"
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_2, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -180,7 +184,7 @@ class ObjectLockingTests(unittest.TestCase):
                 print(self.ObjVersions["key.1.2"])
 
         response = self.s3_client.get_object_retention(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_2,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.2"],
         )
@@ -190,7 +194,7 @@ class ObjectLockingTests(unittest.TestCase):
         # # check version key.1.1 still has the GOVERNANCE retention
 
         response = self.s3_client.get_object_retention(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_2,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.1"],
         )
@@ -198,12 +202,12 @@ class ObjectLockingTests(unittest.TestCase):
         self.check_object_retention(response, "GOVERNANCE", 7, "Days")
 
     def test_object_locking_object_compliance(self):
-        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_1, True)
+        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_3, True)
 
         retainUntilDate = datetime.utcnow() + timedelta(days=6)
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_3,
             Key="key.1",
             Body="data.3",
             ObjectLockMode="COMPLIANCE",
@@ -211,7 +215,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_3, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -220,7 +224,7 @@ class ObjectLockingTests(unittest.TestCase):
                 print(self.ObjVersions["key.1.3"])
 
         response = self.s3_client.get_object_retention(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_3,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.3"],
         )
@@ -229,7 +233,7 @@ class ObjectLockingTests(unittest.TestCase):
 
         try:
             response = self.s3_client.delete_object(
-                Bucket=ObjectLockingTests.BUCKET_NAME_1,
+                Bucket=ObjectLockingTests.BUCKET_NAME_3,
                 Key="key.1",
                 VersionId=self.ObjVersions["key.1.3"],
             )
@@ -245,7 +249,7 @@ class ObjectLockingTests(unittest.TestCase):
         retainUntilDate = datetime.utcnow() + timedelta(seconds=1)
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_3,
             Key="key.1",
             Body="data.3.1",
             ObjectLockMode="COMPLIANCE",
@@ -253,7 +257,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_3, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -265,18 +269,18 @@ class ObjectLockingTests(unittest.TestCase):
         time.sleep(2)
 
         response = self.s3_client.delete_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_3,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.3.1"],
         )
 
     def test_object_locking_object_governance(self):
-        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_1, True)
+        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_4, True)
 
         retainUntilDate = datetime.utcnow() + timedelta(days=13)
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_4,
             Key="key.1",
             Body="data.4",
             ObjectLockMode="GOVERNANCE",
@@ -284,7 +288,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_4, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -293,7 +297,7 @@ class ObjectLockingTests(unittest.TestCase):
                 print(self.ObjVersions["key.1.4"])
 
         response = self.s3_client.get_object_retention(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_4,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.4"],
         )
@@ -302,7 +306,7 @@ class ObjectLockingTests(unittest.TestCase):
 
         try:
             response = self.s3_client.delete_object(
-                Bucket=ObjectLockingTests.BUCKET_NAME_1,
+                Bucket=ObjectLockingTests.BUCKET_NAME_4,
                 Key="key.1",
                 VersionId=self.ObjVersions["key.1.4"],
             )
@@ -316,7 +320,7 @@ class ObjectLockingTests(unittest.TestCase):
         # test deletion is allowed with BypassGovernanceRetention
 
         response = self.s3_client.delete_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_4,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.4"],
             BypassGovernanceRetention=True,
@@ -329,7 +333,7 @@ class ObjectLockingTests(unittest.TestCase):
         retainUntilDate = datetime.utcnow() + timedelta(seconds=1)
 
         self.s3_client.put_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_4,
             Key="key.1",
             Body="data.4.1",
             ObjectLockMode="GOVERNANCE",
@@ -337,7 +341,7 @@ class ObjectLockingTests(unittest.TestCase):
         )
 
         response = self.s3_client.list_object_versions(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1, Prefix="key.1"
+            Bucket=ObjectLockingTests.BUCKET_NAME_4, Prefix="key.1"
         )
 
         for version in response["Versions"]:
@@ -349,10 +353,114 @@ class ObjectLockingTests(unittest.TestCase):
         time.sleep(2)
 
         response = self.s3_client.delete_object(
-            Bucket=ObjectLockingTests.BUCKET_NAME_1,
+            Bucket=ObjectLockingTests.BUCKET_NAME_4,
             Key="key.1",
             VersionId=self.ObjVersions["key.1.4.1"],
         )
+
+    def test_object_locking_legal_hold(self):
+        self.ensure_bucket(ObjectLockingTests.BUCKET_NAME_5, True)
+
+        self.s3_client.put_object(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5, Key="key.1", Body="data.5"
+        )
+
+        response = self.s3_client.list_object_versions(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5, Prefix="key.1"
+        )
+
+        for version in response["Versions"]:
+            if version["Key"] == "key.1" and version["IsLatest"] == True:
+                self.ObjVersions["key.1.5"] = version["VersionId"]
+                print(self.ObjVersions["key.1.5"])
+
+        # put legal hold ON
+
+        response = self.s3_client.put_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+            LegalHold={"Status": "ON"},
+        )
+
+        self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 200)
+
+        response = self.s3_client.get_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+        )
+
+        self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 200)
+        self.assertTrue(response["LegalHold"]["Status"] == "ON")
+
+        # put legal hold OFF
+
+        response = self.s3_client.put_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+            LegalHold={"Status": "OFF"},
+        )
+
+        response = self.s3_client.get_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+        )
+
+        self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 200)
+        self.assertTrue(response["LegalHold"]["Status"] == "OFF")
+
+        # put legal hold ON again
+
+        response = self.s3_client.put_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+            LegalHold={"Status": "ON"},
+        )
+
+        response = self.s3_client.get_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+        )
+
+        self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 200)
+        self.assertTrue(response["LegalHold"]["Status"] == "ON")
+
+        # deletion denied because legal hold
+
+        try:
+            response = self.s3_client.delete_object(
+                Bucket=ObjectLockingTests.BUCKET_NAME_5,
+                Key="key.1",
+                VersionId=self.ObjVersions["key.1.5"],
+            )
+        except botocore.exceptions.ClientError as error:
+            self.assertTrue(error.response["ResponseMetadata"]["HTTPStatusCode"] == 403)
+            self.assertTrue(error.response["Error"]["Code"] == "AccessDenied")
+            self.assertTrue(
+                error.response["Error"]["Message"] == "forbidden by object lock"
+            )
+
+        # remove legal hold and assert deletion allowed
+
+        response = self.s3_client.put_object_legal_hold(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+            LegalHold={"Status": "OFF"},
+        )
+
+        response = self.s3_client.delete_object(
+            Bucket=ObjectLockingTests.BUCKET_NAME_5,
+            Key="key.1",
+            VersionId=self.ObjVersions["key.1.5"],
+        )
+
+        self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 204)
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
