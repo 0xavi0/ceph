@@ -107,7 +107,7 @@ Object* Object::create_commit_new_object(
   return result;
 }
 
-Object* Object::try_create_with_last_version_from_database_fetch(
+Object* Object::try_create_with_last_version_fetch_from_database(
     SFStore* store, const std::string& name, const std::string& bucket_id
 ) {
   sqlite::SQLiteObjects objs(store->db_conn);
@@ -137,7 +137,7 @@ Object* Object::try_create_with_last_version_from_database_fetch(
   return result;
 }
 
-Object* Object::try_create_from_database_fetch(
+Object* Object::try_create_fetch_from_database(
     SFStore* store, const std::string& name, const std::string& bucket_id,
     const std::string& version_id
 ) {
@@ -339,7 +339,7 @@ bool Bucket::want_specific_version(const rgw_obj_key& key) {
 ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
   ObjectRef result;
 
-  auto maybe_result = Object::try_create_with_last_version_from_database_fetch(
+  auto maybe_result = Object::try_create_with_last_version_fetch_from_database(
       store, key.name, info.bucket.bucket_id
   );
 
@@ -357,7 +357,7 @@ ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
   } else if (want_specific_version(key) && maybe_result->instance != key.instance) {
     // requested version is not last
 
-    auto specific_version_object = Object::try_create_from_database_fetch(
+    auto specific_version_object = Object::try_create_fetch_from_database(
         store, key.name, info.bucket.bucket_id, key.instance
     );
 
@@ -380,7 +380,7 @@ ObjectRef Bucket::get_or_create(const rgw_obj_key& key) {
 }
 
 ObjectRef Bucket::get(const std::string& name) {
-  auto maybe_result = Object::try_create_with_last_version_from_database_fetch(
+  auto maybe_result = Object::try_create_with_last_version_fetch_from_database(
       store, name, info.bucket.bucket_id
   );
 

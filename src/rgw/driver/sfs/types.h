@@ -85,10 +85,9 @@ class Object {
       const std::string* version_id
   );
 
-  static Object* try_create_with_last_version_from_database_fetch(
-      SFStore* store, const std::string& name, const std::string& bucket_id
-  );
-  static Object* try_create_from_database_fetch(
+  static Object* try_create_with_last_version_fetch_from_database(
+      SFStore* store, const std::string& name, const std::string& bucket_id);
+  static Object* try_create_fetch_from_database(
       SFStore* store, const std::string& name, const std::string& bucket_id,
       const std::string& version_id
   );
