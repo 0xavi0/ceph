@@ -20,6 +20,7 @@
 #include <chrono>
 #include <filesystem>
 
+#include "common/ceph_mutex.h"
 #include "driver/sfs/bucket.h"
 #include "driver/sfs/object.h"
 #include "driver/sfs/sqlite/dbconn.h"
@@ -28,7 +29,6 @@
 #include "driver/sfs/types.h"
 #include "driver/sfs/user.h"
 #include "driver/sfs/zone.h"
-#include "common/ceph_mutex.h"
 #include "rgw_multi.h"
 #include "rgw_notify.h"
 #include "rgw_oidc_provider.h"
