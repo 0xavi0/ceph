@@ -161,6 +161,17 @@ void SFSAtomicWriter::cleanup() noexcept {
            )
         << dendl;
   }
+
+  try {
+    objref->delete_object_version(store);
+  } catch (const std::system_error& e) {
+    lsfs_dout(dpp, -1)
+        << fmt::format(
+               "failed to remove failed upload version from database {}: {}",
+               store->db_conn->get_storage().filename(), e.what()
+           )
+        << dendl;
+  }
 }
 
 int SFSAtomicWriter::prepare(optional_yield y) {
