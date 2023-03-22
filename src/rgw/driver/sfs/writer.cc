@@ -18,6 +18,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <ranges>
 #include <system_error>
 
 #include "driver/sfs/bucket.h"
@@ -49,8 +50,10 @@ SFSAtomicWriter::SFSAtomicWriter(
       bytes_written(0),
       io_failed(false),
       fd(-1) {
-  lsfs_dout(dpp, 10) << "head_obj: " << _head_obj->get_key()
-                     << ", bucket: " << _head_obj->get_bucket()->get_name()
+  lsfs_dout(dpp, 10) << fmt::format(
+                            "head_obj: {}, bucket: {}", _head_obj->get_key(),
+                            _head_obj->get_bucket()->get_name()
+                        )
                      << dendl;
 }
 
@@ -202,9 +205,12 @@ int SFSAtomicWriter::prepare(optional_yield y) {
 }
 
 int SFSAtomicWriter::process(bufferlist&& data, uint64_t offset) {
-  lsfs_dout(dpp, 10) << "data len: " << data.length() << ", offset: " << offset
-                     << ", io_failed: " << io_failed << ", fd: " << fd
-                     << ", fn: " << object_path << dendl;
+  lsfs_dout(dpp, 10)
+      << fmt::format(
+             "data len: {}, offset: {}, io_failed: {}, fd: {}, fn: {}",
+             data.length(), offset, io_failed, fd, object_path.string()
+         )
+      << dendl;
   if (io_failed) {
     return -ERR_INTERNAL_ERROR;
   }
@@ -249,13 +255,15 @@ int SFSAtomicWriter::complete(
     const std::string* user_data, rgw_zone_set* zones_trace, bool* canceled,
     optional_yield y
 ) {
-  lsfs_dout(dpp, 10) << "accounted_size: " << accounted_size
-                     << ", etag: " << etag
-                     << ", set_mtime: " << to_iso_8601(set_mtime)
-                     << ", attrs: " << attrs
-                     << ", delete_at: " << to_iso_8601(delete_at)
-                     << ", if_match: " << if_match
-                     << ", if_nomatch: " << if_nomatch << dendl;
+  lsfs_dout(dpp, 10)
+      << fmt::format(
+             "accounted_size: {}, etag: {}, set_mtime: {}, attrs: {}, "
+             "delete_at: {}, if_match: {}, if_nomatch: {}",
+             accounted_size, etag, to_iso_8601(set_mtime),
+             fmt::join(std::views::keys(attrs), ", "), to_iso_8601(delete_at),
+             if_match ? if_match : "NA", if_nomatch ? if_nomatch : "NA"
+         )
+      << dendl;
 
   const auto now = ceph::real_clock::now();
   if (bytes_written != accounted_size) {
