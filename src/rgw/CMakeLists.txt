@@ -148,6 +148,7 @@ set(librgw_common_srcs
   rgw_bucket_encryption.cc
   rgw_tracer.cc
   rgw_lua_background.cc
+  rgw_s3gw_telemetry.cc
   driver/rados/cls_fifo_legacy.cc
   driver/rados/rgw_bucket.cc
   driver/rados/rgw_bucket_sync.cc
@@ -366,6 +367,7 @@ set(rgw_a_srcs
   rgw_signal.cc
   rgw_status_frontend.cc
   rgw_status_page.cc
+  rgw_status_page_telemetry.cc
   rgw_swift_auth.cc
   rgw_usage.cc
   rgw_sts.cc

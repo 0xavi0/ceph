@@ -146,6 +146,7 @@ int main(int argc, char *argv[])
     return EIO;
   }
 
+  main.init_s3gw_telemetry();
   main.cond_init_apis();
 
   mutex.lock();

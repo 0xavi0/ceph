@@ -3791,3 +3791,18 @@ options:
     Reserves space for metadata operations and SQLite updates.
   service:
     - rgw
+- name: rgw_s3gw_telemetry_update_interval
+  type: millisecs
+  level: advanced
+  default: 3600000
+  desc: S3GW telemetry update inverval. Set to 0 to disable.
+  service:
+    - rgw
+- name: rgw_s3gw_telemetry_upgrade_responder_url
+  type: str
+  level: advanced
+  default: https://s3gw.version.rancher.io/v1/checkupgrade
+  desc:
+    Rancher upgrade responder URL
+  service:
+    - rgw
