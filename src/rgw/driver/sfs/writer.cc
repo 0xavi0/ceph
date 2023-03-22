@@ -56,7 +56,7 @@ SFSAtomicWriter::SFSAtomicWriter(
 
 SFSAtomicWriter::~SFSAtomicWriter() {
   if (fd >= 0) {
-    lsfs_dout(dpp, 10)
+    lsfs_dout(dpp, -1)
         << fmt::format(
                "BUG: fd:{} still open. closing. (io_failed:{}, object_path:{})",
                fd, io_failed, object_path.string()
@@ -70,7 +70,7 @@ int SFSAtomicWriter::open() noexcept {
   std::error_code ec;
   std::filesystem::create_directories(object_path.parent_path(), ec);
   if (ec) {
-    lsfs_dout(dpp, 10) << "failed to mkdir object path " << object_path << ": "
+    lsfs_dout(dpp, -1) << "failed to mkdir object path " << object_path << ": "
                        << ec << dendl;
     switch (ec.value()) {
       case ENOSPC:
@@ -85,7 +85,7 @@ int SFSAtomicWriter::open() noexcept {
       object_path.c_str(), O_CREAT | O_TRUNC | O_CLOEXEC | O_WRONLY, 0644
   );
   if (ret < 0) {
-    lsfs_dout(dpp, 10) << "error opening file " << object_path << ": "
+    lsfs_dout(dpp, -1) << "error opening file " << object_path << ": "
                        << cpp_strerror(-fd) << dendl;
     return -ERR_INTERNAL_ERROR;
   }
@@ -101,7 +101,7 @@ int SFSAtomicWriter::close() noexcept {
 
   ret = ::fsync(fd);
   if (ret < 0) {
-    lsfs_dout(dpp, 10) << fmt::format(
+    lsfs_dout(dpp, -1) << fmt::format(
                               "failed to fsync fd:{}: {}. continuing.", fd,
                               cpp_strerror(ret)
                           )
@@ -111,7 +111,7 @@ int SFSAtomicWriter::close() noexcept {
   ret = ::close(fd);
   fd = -1;
   if (ret < 0) {
-    lsfs_dout(dpp, 10) << fmt::format(
+    lsfs_dout(dpp, -1) << fmt::format(
                               "failed closing fd:{}: {}. continuing.", fd,
                               cpp_strerror(ret)
                           )
@@ -130,7 +130,7 @@ int SFSAtomicWriter::close() noexcept {
 }
 
 void SFSAtomicWriter::cleanup() noexcept {
-  lsfs_dout(dpp, 10) << fmt::format(
+  lsfs_dout(dpp, -1) << fmt::format(
                             "cleaning up failed upload to file {}. "
                             "returning error.",
                             object_path.string()
@@ -140,7 +140,7 @@ void SFSAtomicWriter::cleanup() noexcept {
   std::error_code ec;
   std::filesystem::remove(object_path, ec);
   if (ec) {
-    lsfs_dout(dpp, 10) << fmt::format(
+    lsfs_dout(dpp, -1) << fmt::format(
                               "failed deleting file {}: {} {}. ignoring.",
                               object_path.string(), ec.message(), ec.value()
                           )
@@ -150,7 +150,7 @@ void SFSAtomicWriter::cleanup() noexcept {
   const auto dir_fd = ::open(object_path.parent_path().c_str(), O_RDONLY);
   int ret = ::fsync(dir_fd);
   if (ret < 0) {
-    lsfs_dout(dpp, 10)
+    lsfs_dout(dpp, -1)
         << fmt::format(
                "failed fsyncing dir {} fd:{} for obj file {}: {}. ignoring.",
                object_path.parent_path().string(), dir_fd, object_path.string(),
@@ -178,7 +178,7 @@ int SFSAtomicWriter::prepare(optional_yield y) {
   try {
     objref = bucketref->get_or_create(obj.get_key());
   } catch (const std::system_error& e) {
-    lsfs_dout(dpp, 10)
+    lsfs_dout(dpp, -1)
         << fmt::format(
                "exception while fetching obj ref from bucket {} db:{}: {}. "
                "failing operation.",
@@ -218,7 +218,7 @@ int SFSAtomicWriter::process(bufferlist&& data, uint64_t offset) {
   ceph_assert(fd >= 0);
   int write_ret = data.write_fd(fd, offset);
   if (write_ret < 0) {
-    lsfs_dout(dpp, 10) << fmt::format(
+    lsfs_dout(dpp, -1) << fmt::format(
                               "failed to write size:{} offset:{} to fd:{}: {}. "
                               "marking writer failed. "
                               "failing future io. "
@@ -259,7 +259,7 @@ int SFSAtomicWriter::complete(
 
   const auto now = ceph::real_clock::now();
   if (bytes_written != accounted_size) {
-    lsfs_dout(dpp, 10)
+    lsfs_dout(dpp, -1)
         << fmt::format(
                "data written != accounted size. {} vs. {}. failing operation. "
                "returning internal error.",
@@ -308,7 +308,7 @@ int SFSAtomicWriter::complete(
   try {
     objref->metadata_finish(store);
   } catch (const std::system_error& e) {
-    lsfs_dout(dpp, 10) << fmt::format(
+    lsfs_dout(dpp, -1) << fmt::format(
                               "failed to update db object {}: {}. "
                               "failing operation. ",
                               objref->name, e.what()
