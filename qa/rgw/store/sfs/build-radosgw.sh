@@ -116,8 +116,9 @@ _build() {
     # adding a new unit test
     # SFS unittests should be named unittest_rgw_sfs*
     IFS=" " read -r -a \
-      UNIT_TESTS <<< "$(grep "build unittest_rgw_sfs" build.ninja \
-                          | awk '{print $4}')"
+      UNIT_TESTS <<< "$(awk '/build unittest_rgw_(sfs|s3gw)/ {
+                               print $4
+                             }' build.ninja)"
     ninja -j "${NPROC}" "${UNIT_TESTS[@]}"
   fi
 
