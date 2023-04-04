@@ -55,6 +55,9 @@ int SFSObject::SFSReadOp::prepare(
   lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
                      << ", obj: " << source->get_name()
                      << ", size: " << source->get_obj_size() << dendl;
+  if (params.lastmod) {
+    *params.lastmod = source->get_mtime();
+  }
   return 0;
 }
 
