@@ -35,6 +35,10 @@ class SFStore;
 
 namespace rgw::sal::sfs {
 
+/// Max S3 object key name length in bytes. Ref:
+/// https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
+constexpr size_t S3_MAX_OBJECT_NAME_BYTES = 1024;
+
 struct UnknownObjectException : public std::exception {};
 
 class Object {

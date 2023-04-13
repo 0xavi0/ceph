@@ -13,10 +13,13 @@
  */
 #include "bucket.h"
 
+#include <cerrno>
 #include <fstream>
+#include <limits>
 
 #include "driver/sfs/multipart.h"
 #include "driver/sfs/object.h"
+#include "driver/sfs/sqlite/sqlite_list.h"
 #include "driver/sfs/sqlite/sqlite_versioned_objects.h"
 #include "driver/sfs/types.h"
 #include "rgw_common.h"
@@ -25,6 +28,7 @@
 #define dout_subsys ceph_subsys_rgw
 
 using namespace std;
+using namespace sqlite_orm;
 
 namespace rgw::sal {
 
@@ -77,35 +81,138 @@ int SFSBucket::list(
     const DoutPrefixProvider* dpp, ListParams& params, int max,
     ListResults& results, optional_yield y
 ) {
-  lsfs_dout(dpp, 10) << "iterate bucket " << get_name() << dendl;
+  lsfs_dout(dpp, 10) << "listing bucket " << get_name() << " max " << max
+                     << " with params " << params << dendl;
+  if (max < 0) {
+    return -EINVAL;
+  }
+  if (max == 0) {
+    results.is_truncated = false;
+    return 0;
+  }
+  if (params.allow_unordered) {
+    // allow unordered is a ceph extension intended to improve performance
+    // of list() by not sorting through results from all over the cluster
+    lsfs_dout(
+        dpp, 10
+    ) << "unsupported allow unordered list requested. returning ordered result."
+      << get_name() << dendl;
+
+    // unordered only supports a limited set of filters. check this here
+    // to not surprise clients
+    if (!params.delim.empty()) {
+      return -ENOTSUP;
+    }
+  }
+  if (!params.end_marker.empty()) {
+    lsfs_dout(dpp, 2) << "unsupported end marker (SWIFT) requested "
+                      << get_name() << dendl;
+    return -ENOTSUP;
+  }
+  if (!params.ns.empty()) {
+    // TODO(https://github.com/aquarist-labs/s3gw/issues/642)
+    return -ENOTSUP;
+  }
+  if (params.access_list_filter) {
+    // TODO(https://github.com/aquarist-labs/s3gw/issues/642)
+    return -ENOTSUP;
+  }
+  if (params.force_check_filter) {
+    // RADOS extension. forced filter by func()
+    return -ENOTSUP;
+  }
+  if (params.shard_id != RGW_NO_SHARD) {
+    // we don't support sharding
+    return -ENOTSUP;
+  }
 
   if (params.list_versions) {
+    lsfs_dout(dpp, 10) << "using versioning list" << dendl;
     return list_versions(dpp, params, max, results, y);
   }
-  auto use_prefix = !params.prefix.empty();
-  // get_all returns the last version of all objects that are not deleted
-  for (const auto& objref : bucket->get_all()) {
-    if (use_prefix && objref->name.rfind(params.prefix, 0) != 0) continue;
-    lsfs_dout(dpp, 10) << "object: " << objref->name << dendl;
-    if (!objref->deleted) {
-      // check for delimiter
-      if (check_add_common_prefix(dpp, objref->name, params, 0, results, y)) {
-        continue;
-      }
-      auto obj = _get_object(objref);
-      rgw_bucket_dir_entry dirent;
-      dirent.key = cls_rgw_obj_key(objref->name, objref->instance);
-      dirent.meta.accounted_size = obj->get_obj_size();
-      dirent.meta.mtime = obj->get_mtime();
-      dirent.meta.etag = objref->get_meta().etag;
-      dirent.meta.owner_display_name = bucket->get_owner().display_name;
-      dirent.meta.owner = bucket->get_owner().user_id.id;
-      results.objs.push_back(dirent);
+
+  lsfs_dout(dpp, 10) << "using regular object list" << dendl;
+  sfs::sqlite::SQLiteList list(store->db_conn);
+  std::string start_with(params.marker.name);
+  if (!params.delim.empty()) {
+    // Having a marker and delimiter means that the user wants to skip
+    // a whole common prefix. Since we compare names ASCII greater
+    // than style, append characters to make this the "greatest"
+    // prefixed name
+    auto delim_pos = start_with.find(params.delim);
+    if (delim_pos != params.delim.npos) {
+      start_with.append(
+          sfs::S3_MAX_OBJECT_NAME_BYTES - delim_pos,
+          std::numeric_limits<char>::max()
+      );
     }
   }
 
-  lsfs_dout(dpp, 10) << "found " << results.objs.size() << " objects" << dendl;
-  return 0;
+  if (list.objects(
+          get_bucket_id(), params.prefix, start_with, max, results.objs,
+          &results.is_truncated
+      )) {
+    if (!params.delim.empty()) {
+      std::vector<rgw_bucket_dir_entry> new_results;
+      list.roll_up_common_prefixes(
+          params.prefix, params.delim, results.objs, results.common_prefixes,
+          new_results
+      );
+
+      // Is there actually more after the rolled up common prefix? We
+      // can't tell form the original object query. Ask again for
+      // anything after the prefix.
+      if (!results.common_prefixes.empty()) {
+        std::vector<rgw_bucket_dir_entry> objects_after;
+        std::string query = std::prev(results.common_prefixes.end())->first;
+        query.append(
+            sfs::S3_MAX_OBJECT_NAME_BYTES - query.size(),
+            std::numeric_limits<char>::max()
+        );
+        list.objects(get_bucket_id(), params.prefix, query, 1, objects_after);
+        results.is_truncated = objects_after.size() > 0;
+      }
+      lsfs_dout(dpp, 10) << fmt::format(
+                                "common prefix rollup #objs:{} -> #objs:{}, "
+                                "#prefix:{}, more:{}",
+                                results.objs.size(), new_results.size(),
+                                results.common_prefixes.size(),
+                                results.is_truncated
+                            )
+                         << dendl;
+      results.objs = new_results;
+    }
+    if (results.is_truncated) {
+      if (results.common_prefixes.empty()) {
+        const auto& last = results.objs.back();
+        results.next_marker = rgw_obj_key(last.key.name);
+      } else {
+        const std::string& last =
+            std::prev(results.common_prefixes.end())->first;
+        results.next_marker = rgw_obj_key(last);
+      }
+    }
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "regular list (prefix:{}, start_after:{}, "
+                              "max:{} delim:{}) successful. #objs_returned:{} "
+                              " #common_pref:{} next:{} have_more:{}",
+                              params.prefix, start_with, max, params.delim,
+                              results.objs.size(),
+                              results.common_prefixes.size(),
+                              results.next_marker, results.is_truncated
+                          )
+                       << dendl;
+    return 0;
+  }
+
+  lsfs_dout(dpp, 10) << fmt::format(
+                            "list (prefix:{}, start_after:{}, "
+                            "max:{}) failed.",
+                            params.prefix, start_with, max, results.objs.size(),
+                            results.next_marker, results.is_truncated
+                        )
+                     << dendl;
+  return -ERR_INTERNAL_ERROR;
 }
 
 int SFSBucket::list_versions(
