@@ -5,7 +5,9 @@ files: >-
     src/rgw/driver/simplefile/.*|
     src/rgw/rgw_sal_sfs\.(h|cc)|
     src/rgw/rgw_status_(page|frontend)\.(h|cc)|
+    src/rgw/rgw_status_page_telemetry\.(h|cc)|
     src/rgw/rgw_sal_simplefile\.(h|cc)
+    src/rgw/rgw_s3gw.*\.(h|cc)
   )$
 repos:
   - repo: https://github.com/pre-commit/mirrors-clang-format
