@@ -45,14 +45,12 @@ http::status TelemetryStatusPage::render(std::ostream& os) {
   );
   for (const auto& version : versions) {
     fmt::print(
-        os,
-	"<li>{} ({:%Y-%m-%d} UTC)</li>\n",
-	version.name,
+        os, "<li>{} ({:%Y-%m-%d} UTC)</li>\n", version.name,
         fmt::gmtime(ceph::real_clock::to_time_t(version.release_date))
     );
   }
   os << "</ul>\n"
-      "</p>\n";
+        "</p>\n";
 
   // Status block
   auto status = telemetry.status();
