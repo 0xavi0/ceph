@@ -114,11 +114,11 @@ _build() {
   if [ "${WITH_TESTS}" == "ON" ] ; then
     # discover tests from build.ninja so we don't need to update this after
     # adding a new unit test
-    # SFS unittests should be named unittest_rgw_sfs*
+    # SFS unittests should be named unittest_rgw_sfs_*
+    # SFS unittests should be named unittest_rgw_s3gw_*
     IFS=" " read -r -a \
-      UNIT_TESTS <<< "$(awk '/build unittest_rgw_(sfs|s3gw)/ {
-                               print $4
-                             }' build.ninja)"
+      UNIT_TESTS <<< "$(grep -E "build unittest_rgw_sfs_|build unittest_rgw_s3gw_" build.ninja \
+                          | awk 'BEGIN {ORS=" "}; {print $4}')"
     ninja -j "${NPROC}" "${UNIT_TESTS[@]}"
   fi
 
