@@ -60,10 +60,9 @@ TEST_F(TestSFSSQLiteLifecycle, GetHeadFirstTime) {
 
   // first time we call get_head there is no head and we create an empty one
   auto lc_head = db_lc->get_head(LC_SHARD);
-  ASSERT_TRUE(lc_head.has_value());
-  ASSERT_EQ(lc_head->lc_index, LC_SHARD);
-  ASSERT_EQ(lc_head->marker, "");
-  ASSERT_EQ(lc_head->start_date, 0);
+  ASSERT_EQ(lc_head.lc_index, LC_SHARD);
+  ASSERT_EQ(lc_head.marker, "");
+  ASSERT_EQ(lc_head.start_date, 0);
 }
 
 TEST_F(TestSFSSQLiteLifecycle, StoreHead) {
@@ -78,10 +77,9 @@ TEST_F(TestSFSSQLiteLifecycle, StoreHead) {
   db_lc->store_head(db_head);
 
   auto lc_head = db_lc->get_head(LC_SHARD);
-  ASSERT_TRUE(lc_head.has_value());
-  ASSERT_EQ(lc_head->lc_index, LC_SHARD);
-  ASSERT_EQ(lc_head->marker, "bucket_name_marker");
-  ASSERT_EQ(lc_head->start_date, 12345);
+  ASSERT_EQ(lc_head.lc_index, LC_SHARD);
+  ASSERT_EQ(lc_head.marker, "bucket_name_marker");
+  ASSERT_EQ(lc_head.start_date, 12345);
 }
 
 TEST_F(TestSFSSQLiteLifecycle, StoreDeleteHead) {
@@ -96,18 +94,16 @@ TEST_F(TestSFSSQLiteLifecycle, StoreDeleteHead) {
   db_lc->store_head(db_head);
 
   auto lc_head = db_lc->get_head(LC_SHARD);
-  ASSERT_TRUE(lc_head.has_value());
-  ASSERT_EQ(lc_head->lc_index, LC_SHARD);
-  ASSERT_EQ(lc_head->marker, "bucket_name_marker");
-  ASSERT_EQ(lc_head->start_date, 12345);
+  ASSERT_EQ(lc_head.lc_index, LC_SHARD);
+  ASSERT_EQ(lc_head.marker, "bucket_name_marker");
+  ASSERT_EQ(lc_head.start_date, 12345);
 
   db_lc->remove_head(LC_SHARD);
   // now head is not stored so we create an empty one when calling get
   lc_head = db_lc->get_head(LC_SHARD);
-  ASSERT_TRUE(lc_head.has_value());
-  ASSERT_EQ(lc_head->lc_index, LC_SHARD);
-  ASSERT_EQ(lc_head->marker, "");
-  ASSERT_EQ(lc_head->start_date, 0);
+  ASSERT_EQ(lc_head.lc_index, LC_SHARD);
+  ASSERT_EQ(lc_head.marker, "");
+  ASSERT_EQ(lc_head.start_date, 0);
 }
 
 TEST_F(TestSFSSQLiteLifecycle, StoreGetEntry) {
@@ -123,7 +119,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreGetEntry) {
   ASSERT_FALSE(db_entry_not_found.has_value());
 
   // store entry
-  DBOPLEntry db_entry { LC_SHARD, "bucket_name_marker", 12345, 123 };
+  DBOPLCEntry db_entry { LC_SHARD, "bucket_name_marker", 12345, 123 };
   db_lc->store_entry(db_entry);
 
   auto db_entry_found = db_lc->get_entry(LC_SHARD, "bucket_name_marker");
@@ -147,11 +143,11 @@ TEST_F(TestSFSSQLiteLifecycle, GetNextEntry) {
   ASSERT_FALSE(no_entries.has_value());
 
   // store a few entries
-  DBOPLEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
-  DBOPLEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
-  DBOPLEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
-  DBOPLEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
-  DBOPLEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
+  DBOPLCEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
+  DBOPLCEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
+  DBOPLCEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
+  DBOPLCEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
+  DBOPLCEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
   db_lc->store_entry(db_entry_1);
   db_lc->store_entry(db_entry_2);
   db_lc->store_entry(db_entry_3);
@@ -212,11 +208,11 @@ TEST_F(TestSFSSQLiteLifecycle, ListEntries) {
   auto db_lc = std::make_shared<SQLiteLifecycle>(conn);
 
   // store a few entries
-  DBOPLEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
-  DBOPLEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
-  DBOPLEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
-  DBOPLEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
-  DBOPLEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
+  DBOPLCEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
+  DBOPLCEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
+  DBOPLCEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
+  DBOPLCEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
+  DBOPLCEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
   db_lc->store_entry(db_entry_1);
   db_lc->store_entry(db_entry_2);
   db_lc->store_entry(db_entry_3);

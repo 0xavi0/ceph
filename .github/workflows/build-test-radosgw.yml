@@ -107,7 +107,7 @@ jobs:
           echo "Running Integration Tests:"
           cd ceph/qa/rgw/store/sfs/tests
 
-          python3 -m unittest test-*.py
+          python3 -m unittest -v test-*.py
 
           docker kill $CONTAINER
 
