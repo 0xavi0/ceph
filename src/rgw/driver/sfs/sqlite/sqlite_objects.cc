@@ -84,8 +84,26 @@ void SQLiteObjects::store_object(const DBOPObjectInfo& object) const {
 }
 
 void SQLiteObjects::remove_object(const uuid_d& uuid) const {
+  // if the object has versions this method could throw a foreign key exception
   auto storage = conn->get_storage();
   storage.remove<DBObject>(uuid.to_string());
+}
+
+std::vector<uint> SQLiteObjects::remove_object_recursive(const uuid_d& uuid
+) const {
+  auto storage = conn->get_storage();
+  auto transaction = storage.transaction_guard();
+  auto str_uuid = uuid.to_string();
+  // ensure that there are no versions left
+  auto versions = storage.select(
+      &DBVersionedObject::id, where(c(&DBVersionedObject::object_id) = str_uuid)
+  );
+  storage.remove_all<DBVersionedObject>(
+      where(c(&DBVersionedObject::object_id) = str_uuid)
+  );
+  storage.remove<DBObject>(uuid.to_string());
+  transaction.commit();
+  return versions;
 }
 
 std::vector<uuid_d> SQLiteObjects::get_object_ids() const {

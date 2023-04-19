@@ -36,6 +36,7 @@ class SQLiteObjects {
 
   void store_object(const DBOPObjectInfo& object) const;
   void remove_object(const uuid_d& uuid) const;
+  std::vector<uint> remove_object_recursive(const uuid_d& uuid) const;
 
   std::vector<uuid_d> get_object_ids() const;
   std::vector<uuid_d> get_object_ids(const std::string& bucket_id) const;

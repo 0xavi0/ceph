@@ -121,4 +121,29 @@ SQLiteVersionedObjects::get_last_versioned_object(const uuid_d& object_id
   return ret_value;
 }
 
+std::vector<DBOPVersionedObjectInfo>
+SQLiteVersionedObjects::get_deleted_versioned_objects_highest_priority_first(
+    uint max_objects
+) const {
+  auto storage = conn->get_storage();
+  if (max_objects > 0) {
+    auto versioned_objects = storage.get_all<DBVersionedObject>(
+        where(
+            c(&DBVersionedObject::object_state) =
+                static_cast<uint>(ObjectState::DELETED)
+        ),
+        order_by(&DBVersionedObject::size).desc(), limit(max_objects)
+    );
+    return get_rgw_versioned_objects(versioned_objects);
+  }
+  auto versioned_objects = storage.get_all<DBVersionedObject>(
+      where(
+          c(&DBVersionedObject::object_state) =
+              static_cast<uint>(ObjectState::DELETED)
+      ),
+      order_by(&DBVersionedObject::size).desc()
+  );
+  return get_rgw_versioned_objects(versioned_objects);
+}
+
 }  // namespace rgw::sal::sfs::sqlite

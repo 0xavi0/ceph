@@ -18,6 +18,7 @@
 #include <string>
 
 #include "rgw/driver/sfs/object_state.h"
+#include "rgw/driver/sfs/sfs_errors.h"
 #include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
 #include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
@@ -244,6 +245,7 @@ void Object::metadata_finish(SFStore* store) {
   sqlite::SQLiteObjects dbobjs(store->db_conn);
   auto db_object = dbobjs.get_object(path.get_uuid());
   ceph_assert(db_object.has_value());
+
   db_object->name = name;
   db_object->size = meta.size;
   db_object->etag = meta.etag;
@@ -264,27 +266,78 @@ void Object::metadata_finish(SFStore* store) {
   db_versioned_objs.store_versioned_object(*db_versioned_object);
 }
 
-int Object::delete_object_version(SFStore* store) const {
-  // remove metadata
-  sqlite::SQLiteVersionedObjects db_versioned_objs(store->db_conn);
-  db_versioned_objs.remove_versioned_object(version_id);
+ObjectDeleter::ObjectDeleter(
+    sqlite::DBConnRef _dbconn, const std::filesystem::path& _base_path
+)
+    : dbconn(_dbconn), base_path(_base_path) {}
+
+int ObjectDeleter::delete_object(const uuid_d& uuid) const {
+  std::vector<uint> versions;
+  auto ret = delete_object_metadata(uuid, versions);
+  if (ret < 0) {
+    return ret;
+  }
+  return delete_object_data(uuid, versions);
+}
+
+int ObjectDeleter::delete_version(const uuid_d& uuid, uint version) const {
+  auto ret = delete_version_metadata(uuid, version);
+  if (ret < 0) {
+    return ret;
+  }
+  return delete_version_data(uuid, version);
+}
+
+int ObjectDeleter::delete_version_metadata(const uuid_d& uuid, uint version)
+    const {
+  try {
+    sqlite::SQLiteVersionedObjects db_versions(dbconn);
+    db_versions.remove_versioned_object(version);
+  } catch (const std::system_error& e) {
+    return -ERR_SFS_METADATA_DELETE_ERROR;
+  }
   return 0;
 }
 
-void Object::delete_object_metadata(SFStore* store) const {
-  // remove metadata
-  sqlite::SQLiteObjects db_objs(store->db_conn);
-  db_objs.remove_object(path.get_uuid());
+int ObjectDeleter::delete_version_data(const uuid_d& uuid, uint version) const {
+  try {
+    rgw::sal::sfs::UUIDPath uuid_path(uuid);
+    std::filesystem::remove(
+        base_path / uuid_path.to_path() / std::to_string(version)
+    );
+  } catch (const std::filesystem::filesystem_error& e) {
+    return -EIO;
+  }
+  return 0;
 }
 
-void Object::delete_object_data(SFStore* store, bool all) const {
-  if (all) {
-    // remove object folder
-    std::filesystem::remove(store->get_data_path() / path.to_path());
-  } else {
-    // remove object data
-    std::filesystem::remove(store->get_data_path() / get_storage_path());
+int ObjectDeleter::delete_object_metadata(
+    const uuid_d& uuid, std::vector<uint>& versions
+) const {
+  try {
+    sqlite::SQLiteObjects db_objects(dbconn);
+    versions = db_objects.remove_object_recursive(uuid);
+  } catch (const std::system_error& e) {
+    return -ERR_SFS_METADATA_DELETE_ERROR;
   }
+  return 0;
+}
+
+int ObjectDeleter::delete_object_data(
+    const uuid_d& uuid, const std::vector<uint>& versions
+) const {
+  try {
+    rgw::sal::sfs::UUIDPath uuid_path(uuid);
+    for (const auto& version : versions) {
+      std::filesystem::remove(
+          base_path / uuid_path.to_path() / std::to_string(version)
+      );
+    }
+    std::filesystem::remove(base_path / uuid_path.to_path());
+  } catch (const std::filesystem::filesystem_error& e) {
+    return -EIO;
+  }
+  return 0;
 }
 
 void MultipartObject::_abort(const DoutPrefixProvider* dpp) {

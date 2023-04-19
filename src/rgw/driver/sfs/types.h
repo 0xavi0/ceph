@@ -122,12 +122,33 @@ class Object {
 
   /// Commit attrs to database
   void metadata_flush_attrs(SFStore* store);
+};
 
-  int delete_object_version(SFStore* store) const;
-  void delete_object_metadata(SFStore* store) const;
-  /// Delete object _data_ (e.g payload of PUT operations) from disk.
-  // Set all=true to delete all versions, not just this version.
-  void delete_object_data(SFStore* store, bool all) const;
+/// Object and object version delete utility
+class ObjectDeleter {
+ private:
+  sqlite::DBConnRef dbconn;
+  std::filesystem::path base_path;
+
+ public:
+  ObjectDeleter(
+      sqlite::DBConnRef _dbconn, const std::filesystem::path& _base_path
+  );
+
+  /// Delete object and its versions (data and metadata)
+  int delete_object(const uuid_d& uuid) const;
+
+  /// Delete version (data and metadata)
+  int delete_version(const uuid_d& uuid, uint version) const;
+
+  int delete_version_metadata(const uuid_d& uuid, uint version) const;
+  int delete_version_data(const uuid_d& uuid, uint version) const;
+  // deletes the object and versions metadata.
+  // returns the versions deleted so we can download the data in filesystem
+  int delete_object_metadata(const uuid_d& uuid, std::vector<uint>& versions)
+      const;
+  int delete_object_data(const uuid_d& uuid, const std::vector<uint>& versions)
+      const;
 };
 
 using ObjectRef = std::shared_ptr<Object>;

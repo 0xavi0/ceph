@@ -46,6 +46,10 @@ class SQLiteVersionedObjects {
   std::optional<DBOPVersionedObjectInfo> get_last_versioned_object(
       const uuid_d& object_id
   ) const;
+
+  std::vector<DBOPVersionedObjectInfo>
+  get_deleted_versioned_objects_highest_priority_first(uint max_objects = 0)
+      const;
 };
 
 }  // namespace rgw::sal::sfs::sqlite

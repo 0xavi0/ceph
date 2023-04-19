@@ -14,11 +14,36 @@
 #include "sfs_gc.h"
 
 #include "driver/sfs/types.h"
+#include "rgw/driver/sfs/sfs_errors.h"
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
 
 namespace rgw::sal::sfs {
 
-SFSGC::SFSGC(CephContext* _cctx, SFStore* _store) : cct(_cctx), store(_store) {
+class BucketMetadataError : std::exception {
+  std::string _bucket_name;
+
+ public:
+  BucketMetadataError(const std::string& bucket_name)
+      : _bucket_name(bucket_name) {}
+
+  const std::string& bucket_name() const noexcept { return _bucket_name; }
+
+  const char* what() const noexcept {
+    std::ostringstream oss;
+    oss << "Error deleting bucket metadata for bucket: " << _bucket_name;
+    return oss.str().c_str();
+  }
+};
+
+bool can_delete_whole_object(size_t nb_versions, long int max_objects) {
+  auto items_in_object = static_cast<long int>(nb_versions + 1);
+  return (max_objects - items_in_object) >= 0;
+}
+
+SFSGC::SFSGC(CephContext* _cctx, SFStore* _store)
+    : cct(_cctx),
+      store(_store),
+      deleter(new sfs::ObjectDeleter(store->db_conn, store->get_data_path())) {
   worker = std::make_unique<GCWorker>(this, cct, this);
 }
 
@@ -38,8 +63,15 @@ int SFSGC::process() {
   lsfs_dout(this, 10) << "garbage collection: processing with max_objects = "
                       << max_objects << dendl;
 
-  // For now, delete only the objects with deleted bucket.
-  process_deleted_buckets();
+  auto ret = process_deleted_buckets();
+  if (ret < 0) {
+    return ret;
+  }
+  ret = process_deleted_versions();
+  if (ret < 0) {
+    return ret;
+  }
+
   return 0;
 }
 
@@ -73,7 +105,7 @@ std::ostream& SFSGC::gen_prefix(std::ostream& out) const {
   return out << "garbage collection: ";
 }
 
-void SFSGC::process_deleted_buckets() {
+int SFSGC::process_deleted_buckets() {
   // permanently delete removed buckets and their objects and versions
   sqlite::SQLiteBuckets db_buckets(store->db_conn);
   auto deleted_buckets = db_buckets.get_deleted_buckets_ids();
@@ -83,66 +115,191 @@ void SFSGC::process_deleted_buckets() {
     if (max_objects <= 0) {
       break;
     }
-    delete_bucket(bucket_id);
-  }
-}
-
-void SFSGC::delete_objects(const std::string& bucket_id) {
-  sqlite::SQLiteObjects db_objs(store->db_conn);
-  auto objects = db_objs.get_objects(bucket_id);
-  for (auto const& object : objects) {
-    if (max_objects <= 0) {
-      break;
+    auto ret = delete_bucket(bucket_id);
+    if (ret < 0) {
+      if (!able_to_continue_after_error(ret)) {
+        return ret;
+      }
     }
-    auto obj_instance =
-        std::unique_ptr<Object>(Object::create_for_immediate_deletion(object));
-    delete_object(*obj_instance.get());
   }
+  return 0;
 }
 
-void SFSGC::delete_versioned_objects(const Object& object) {
-  sqlite::SQLiteVersionedObjects db_ver_objs(store->db_conn);
-  auto versions = db_ver_objs.get_versioned_objects(object.path.get_uuid());
+int SFSGC::process_deleted_versions() {
+  sqlite::SQLiteVersionedObjects db_versions(store->db_conn);
+  std::map<uuid_d, bool> already_deleted;
+
+  // get deleted versions ordered by descending size
+  auto versions =
+      db_versions.get_deleted_versioned_objects_highest_priority_first(
+          max_objects
+      );
   for (auto const& version : versions) {
     if (max_objects <= 0) {
       break;
     }
-
-    Object to_be_deleted(object);
-    to_be_deleted.version_id = version.id;
-    delete_versioned_object(to_be_deleted);
+    if (already_deleted.contains(version.object_id)) {
+      // skip if the whole object was already deleted
+      continue;
+    }
+    lsfs_dout(this, 30) << "Checking deleted version: [" << version.object_id
+                        << ", " << version.id << "]" << dendl;
+    // check if object has been deleted or it's just a noncurrent version
+    auto last_version =
+        db_versions.get_last_versioned_object(version.object_id);
+    if (last_version->object_state == ObjectState::DELETED) {
+      // object is deleted... try to delete the object and its versions
+      bool whole_object_deleted = false;
+      auto ret = delete_object(version.object_id, whole_object_deleted);
+      if (ret < 0) {
+        if (!able_to_continue_after_error(ret)) {
+          return ret;
+        }
+      } else {
+        if (whole_object_deleted) {
+          already_deleted[version.object_id] = true;
+          lsfs_dout(this, 30)
+              << "Deleted object: " << version.object_id << dendl;
+        }
+      }
+    } else {
+      // this is a noncurrent version
+      auto ret = delete_version(version.object_id, version.id);
+      if (ret < 0) {
+        if (!able_to_continue_after_error(ret)) {
+          return ret;
+        }
+      } else {
+        lsfs_dout(this, 30) << "Deleted version: [" << version.object_id << ", "
+                            << version.id << "]" << dendl;
+      }
+    }
   }
+  return 0;
 }
 
-void SFSGC::delete_bucket(const std::string& bucket_id) {
+int SFSGC::delete_objects(const std::string& bucket_id) {
+  sqlite::SQLiteObjects db_objs(store->db_conn);
+  auto object_ids = db_objs.get_object_ids(bucket_id);
+  int last_error_deleting_objects = 0;
+  for (auto const& id : object_ids) {
+    if (max_objects <= 0) {
+      break;
+    }
+    bool whole_object_deleted;
+    auto ret = delete_object(id, whole_object_deleted);
+    if (ret < 0) {
+      // as we might continue trying to delete objects, we keep the last
+      // possible error.
+      // In case that any error occurred when deleting any object, the bucket
+      // cannot be deleted. (or it will throw a foreign key violation exception)
+      last_error_deleting_objects = ret;
+      if (!able_to_continue_after_error(ret)) {
+        return ret;
+      }
+    }
+  }
+  return last_error_deleting_objects;
+}
+
+int SFSGC::delete_bucket(const std::string& bucket_id) {
   // delete the objects of the bucket first
-  delete_objects(bucket_id);
+  auto ret = delete_objects(bucket_id);
+  if (ret < 0) {
+    return ret;
+  }
   if (max_objects > 0) {
-    sqlite::SQLiteBuckets db_buckets(store->db_conn);
-    db_buckets.remove_bucket(bucket_id);
-    lsfs_dout(this, 30) << "Deleted bucket: " << bucket_id << dendl;
-    --max_objects;
+    try {
+      sqlite::SQLiteBuckets db_buckets(store->db_conn);
+      db_buckets.remove_bucket(bucket_id);
+      lsfs_dout(this, 30) << "Deleted bucket: " << bucket_id << dendl;
+      --max_objects;
+    } catch (const std::system_error& e) {
+      return -ERR_SFS_METADATA_DELETE_ERROR;
+    }
+  }
+  return 0;
+}
+
+int SFSGC::delete_object(const uuid_d& uuid, bool& whole_object_deleted) {
+  // can we delete the whole object?
+  sqlite::SQLiteVersionedObjects db_versions(store->db_conn);
+  auto versions = db_versions.get_versioned_object_ids(uuid);
+  if (can_delete_whole_object(versions.size(), max_objects)) {
+    // can delete the whole object
+    auto ret = deleter->delete_object(uuid);
+    if (ret < 0) {
+      log_gc_error(ret, uuid);
+      return ret;
+    }
+    max_objects -= (versions.size() + 1);
+    whole_object_deleted = true;
+  } else {
+    for (auto const& version : versions) {
+      if (max_objects <= 0) {
+        break;
+      }
+      auto ret = delete_version(uuid, version);
+      if (ret < 0) {
+        return ret;
+      }
+      --max_objects;
+      lsfs_dout(this, 30) << "Deleted version: [" << uuid << ", " << version
+                          << "]" << dendl;
+    }
+    if (max_objects > 0) {
+      std::vector<uint> versions;
+      auto ret = deleter->delete_object_metadata(uuid, versions);
+      if (ret < 0) {
+        log_gc_error(ret, uuid);
+        return ret;
+      }
+      whole_object_deleted = true;
+      --max_objects;
+    }
+  }
+  return 0;
+}
+
+int SFSGC::delete_version(const uuid_d& uuid, uint version) {
+  auto ret = deleter->delete_version(uuid, version);
+  if (ret < 0) {
+    log_gc_error(ret, uuid, version);
+  }
+  return ret;
+}
+
+void SFSGC::log_gc_error(int error, const uuid_d& uuid) const {
+  if (error == -ERR_SFS_METADATA_DELETE_ERROR) {
+    lsfs_dout(this, 30) << "Error deleting metadata for object: " << uuid
+                        << ". Retrying next iteration." << dendl;
+  } else if (error == -EIO) {
+    lsfs_dout(this, 30) << "Error deleting data for object: " << uuid
+                        << ". Orphan files may exist." << dendl;
+  } else {
+    lsfs_dout(this, 30) << "Unknown error deleting object: " << uuid
+                        << ". Orphan files may exist." << dendl;
   }
 }
 
-void SFSGC::delete_object(const Object& object) {
-  // delete its versions first
-  delete_versioned_objects(object);
-  if (max_objects > 0) {
-    object.delete_object_metadata(store);
-    object.delete_object_data(store, true);
-    lsfs_dout(this, 30) << "Deleted object: " << object.path.get_uuid()
-                        << dendl;
-    --max_objects;
+void SFSGC::log_gc_error(int error, const uuid_d& uuid, uint version) const {
+  if (error == -ERR_SFS_METADATA_DELETE_ERROR) {
+    lsfs_dout(this, 30) << "Error deleting metadata for version: [" << uuid
+                        << "," << version << "]"
+                        << ". Retrying next iteration." << dendl;
+  } else if (error == -EIO) {
+    lsfs_dout(this, 30) << "Error deleting for version : [" << uuid << ","
+                        << version << "]"
+                        << ". Orphan files may exist." << dendl;
+  } else {
+    lsfs_dout(this, 30) << "Unknown error deleting version: [" << uuid << ","
+                        << version << "]"
+                        << ". Orphan files may exist." << dendl;
   }
 }
 
-void SFSGC::delete_versioned_object(const Object& object) {
-  object.delete_object_version(store);
-  object.delete_object_data(store, false);
-  lsfs_dout(this, 30) << "Deleted version: (" << object.path.get_uuid() << ","
-                      << object.version_id << ")" << dendl;
-  --max_objects;
+bool SFSGC::able_to_continue_after_error(int error) const {
+  return (error == -ERR_SFS_METADATA_DELETE_ERROR || error == -EIO);
 }
 
 SFSGC::GCWorker::GCWorker(
@@ -175,7 +332,6 @@ void* SFSGC::GCWorker::entry() {
     if (secs <= 0) {
       // in case the GC iteration took more time than the period
       secs = cct->_conf->rgw_gc_processor_period;
-      ;
     }
 
     std::unique_lock locker{lock};

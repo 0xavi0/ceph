@@ -28,6 +28,7 @@ class SFSGC : public DoutPrefixProvider {
   std::atomic<bool> down_flag = {true};
   std::atomic<bool> suspend_flag = {false};
   long int max_objects;
+  std::unique_ptr<sfs::ObjectDeleter> deleter;
 
   class GCWorker : public Thread {
     const DoutPrefixProvider* dpp = nullptr;
@@ -67,14 +68,19 @@ class SFSGC : public DoutPrefixProvider {
   std::string get_cls_name() const { return "SFSGC"; }
 
  private:
-  void process_deleted_buckets();
+  int process_deleted_buckets();
+  int process_deleted_versions();
 
-  void delete_objects(const std::string& bucket_id);
-  void delete_versioned_objects(const Object& object);
+  int delete_objects(const std::string& bucket_id);
+  int delete_bucket(const std::string& bucket_id);
 
-  void delete_bucket(const std::string& bucket_id);
-  void delete_object(const Object& object);
-  void delete_versioned_object(const Object& object);
+  int delete_object(const uuid_d& uuid, bool& whole_object_deleted);
+  int delete_version(const uuid_d& uuid, uint version);
+
+  void log_gc_error(int error, const uuid_d& uuid) const;
+  void log_gc_error(int error, const uuid_d& uuid, uint version) const;
+
+  bool able_to_continue_after_error(int error) const;
 };
 
 }  //  namespace rgw::sal::sfs
