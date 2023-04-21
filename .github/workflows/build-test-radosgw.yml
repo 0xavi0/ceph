@@ -204,6 +204,7 @@ jobs:
           export CEPH_DIR="${GITHUB_WORKSPACE}/ceph"
           export OUTPUT_DIR="${GITHUB_WORKSPACE}/s3test-results"
           export FORCE_CONTAINER=ON
+          export FORCE_DOCKER=ON
           export \
             FIXTURES="${GITHUB_WORKSPACE}/ceph/qa/rgw/store/sfs/tests/fixtures"
 
