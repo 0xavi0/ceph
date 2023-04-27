@@ -271,6 +271,8 @@ target_include_directories(unittest_rgw_s3gw_telemetry
   SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw"
   SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw/store/rados")
 target_link_libraries(unittest_rgw_s3gw_telemetry ${rgw_libs})
+set_tests_properties(unittest_rgw_s3gw_telemetry
+  PROPERTIES LABELS "unittest;rgw;s3gw;telemetry")
 
 add_executable(unittest_rgw_lua test_rgw_lua.cc)
 add_ceph_unittest(unittest_rgw_lua)

@@ -1,34 +1,18 @@
-add_executable(unittest_rgw_sfs_sqlite_users test_rgw_sfs_sqlite_users.cc)
-add_ceph_unittest(unittest_rgw_sfs_sqlite_users)
-target_link_libraries(unittest_rgw_sfs_sqlite_users ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sqlite_buckets test_rgw_sfs_sqlite_buckets.cc)
-add_ceph_unittest(unittest_rgw_sfs_sqlite_buckets)
-target_link_libraries(unittest_rgw_sfs_sqlite_buckets ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sqlite_objects test_rgw_sfs_sqlite_objects.cc)
-add_ceph_unittest(unittest_rgw_sfs_sqlite_objects)
-target_link_libraries(unittest_rgw_sfs_sqlite_objects ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sqlite_versioned_objects test_rgw_sfs_sqlite_versioned_objects.cc)
-add_ceph_unittest(unittest_rgw_sfs_sqlite_versioned_objects)
-target_link_libraries(unittest_rgw_sfs_sqlite_versioned_objects ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sqlite_lifecycle test_rgw_sfs_sqlite_lifecycle.cc)
-add_ceph_unittest(unittest_rgw_sfs_sqlite_lifecycle)
-target_link_libraries(unittest_rgw_sfs_sqlite_lifecycle ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sfs_bucket test_rgw_sfs_sfs_bucket.cc)
-add_ceph_unittest(unittest_rgw_sfs_sfs_bucket)
-target_link_libraries(unittest_rgw_sfs_sfs_bucket ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_sfs_user test_rgw_sfs_sfs_user.cc)
-add_ceph_unittest(unittest_rgw_sfs_sfs_user)
-target_link_libraries(unittest_rgw_sfs_sfs_user ${rgw_libs})
-
-add_executable(unittest_rgw_sfs_gc test_rgw_sfs_gc.cc)
-add_ceph_unittest(unittest_rgw_sfs_gc)
-target_link_libraries(unittest_rgw_sfs_gc ${rgw_libs})
-
 add_custom_target(unittest_rgw_sfs)
-add_dependencies(unittest_rgw_sfs unittest_rgw_sfs_sqlite_users unittest_rgw_sfs_sqlite_buckets unittest_rgw_sfs_sqlite_objects unittest_rgw_sfs_sqlite_versioned_objects unittest_rgw_sfs_sfs_bucket unittest_rgw_sfs_sfs_user unittest_rgw_sfs_gc unittest_rgw_sfs_sqlite_lifecycle)
+
+function(add_s3gw_test test_name test_path)
+  add_executable(${test_name} ${test_path})
+  add_ceph_unittest(${test_name})
+  target_link_libraries(${test_name} ${rgw_libs})
+  set_tests_properties(${test_name} PROPERTIES LABELS "unittest;rgw;sfs;s3gw")
+  add_dependencies(unittest_rgw_sfs ${test_name})
+endfunction()
+
+add_s3gw_test(unittest_rgw_sfs_sqlite_users test_rgw_sfs_sqlite_users.cc)
+add_s3gw_test(unittest_rgw_sfs_sqlite_buckets test_rgw_sfs_sqlite_buckets.cc)
+add_s3gw_test(unittest_rgw_sfs_sqlite_objects test_rgw_sfs_sqlite_objects.cc)
+add_s3gw_test(unittest_rgw_sfs_sqlite_versioned_objects test_rgw_sfs_sqlite_versioned_objects.cc)
+add_s3gw_test(unittest_rgw_sfs_sqlite_lifecycle test_rgw_sfs_sqlite_lifecycle.cc)
+add_s3gw_test(unittest_rgw_sfs_sfs_bucket test_rgw_sfs_sfs_bucket.cc)
+add_s3gw_test(unittest_rgw_sfs_sfs_user test_rgw_sfs_sfs_user.cc)
+add_s3gw_test(unittest_rgw_sfs_gc test_rgw_sfs_gc.cc)

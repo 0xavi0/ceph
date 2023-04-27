@@ -112,13 +112,9 @@ _build() {
   ninja -j "${NPROC}" bin/radosgw crypto_plugins
 
   if [ "${WITH_TESTS}" == "ON" ] ; then
-    # discover tests from build.ninja so we don't need to update this after
-    # adding a new unit test
-    # SFS unittests should be named unittest_rgw_sfs_*
-    # SFS unittests should be named unittest_rgw_s3gw_*
-    IFS=" " read -r -a \
-      UNIT_TESTS <<< "$(grep -E "build unittest_rgw_sfs_|build unittest_rgw_s3gw_" build.ninja \
-                          | awk 'BEGIN {ORS=" "}; {print $4}')"
+    # discover tests from ctest tags. Selects all tests which have the tag s3gw
+    mapfile -t \
+      UNIT_TESTS <<< "$(ctest -N -L s3gw | grep "Test #" | awk '{print $3}')"
     ninja -j "${NPROC}" "${UNIT_TESTS[@]}"
   fi
 
