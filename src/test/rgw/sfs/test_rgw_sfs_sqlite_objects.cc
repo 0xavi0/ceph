@@ -1,18 +1,17 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_objects.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-#include "rgw/driver/sfs/sqlite/objects/object_conversions.h"
-
-#include "rgw/rgw_sal_sfs.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_objects.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -20,7 +19,7 @@ namespace fs = std::filesystem;
 const static std::string TEST_DIR = "rgw_sfs_tests";
 
 class TestSFSSQLiteObjects : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -36,24 +35,24 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
-  void createUser(const std::string & username, DBConnRef conn) {
+  void createUser(const std::string& username, DBConnRef conn) {
     SQLiteUsers users(conn);
     DBOPUserInfo user;
     user.uinfo.user_id.id = username;
     users.store_user(user);
   }
 
-  void createBucket(const std::string & username, const std::string & bucketname, DBConnRef conn) {
+  void createBucket(
+      const std::string& username, const std::string& bucketname, DBConnRef conn
+  ) {
     createUser(username, conn);
     SQLiteBuckets buckets(conn);
     DBOPBucketInfo bucket;
@@ -64,33 +63,25 @@ protected:
   }
 };
 
-void compareObjects(const DBOPObjectInfo & origin, const DBOPObjectInfo & dest) {
+void compareObjects(const DBOPObjectInfo& origin, const DBOPObjectInfo& dest) {
   ASSERT_EQ(origin.uuid, dest.uuid);
   ASSERT_EQ(origin.bucket_id, dest.bucket_id);
   ASSERT_EQ(origin.name, dest.name);
-  ASSERT_EQ(origin.size, dest.size);
-  ASSERT_EQ(origin.etag, dest.etag);
-  ASSERT_EQ(origin.mtime, dest.mtime);
-  ASSERT_EQ(origin.set_mtime, dest.set_mtime);
-  ASSERT_EQ(origin.delete_at, dest.delete_at);
 }
 
-DBOPObjectInfo createTestObject(const std::string & suffix, CephContext *context, const std::string & username="usertest") {
+DBOPObjectInfo createTestObject(
+    const std::string& suffix, CephContext* context,
+    const std::string& username = "usertest"
+) {
   DBOPObjectInfo object;
   object.uuid.generate_random();
   object.bucket_id = "test_bucket";
   object.name = "test" + suffix;
-  object.size = rand();
-  object.etag = "test_etag_" + suffix;
-  object.mtime = ceph::real_clock::now();
-  object.set_mtime = ceph::real_clock::now();
-  object.delete_at = ceph::real_clock::now();
   return object;
 }
 
-bool uuidInVector(const uuid_d & uuid, const std::vector<uuid_d> & uuids)
-{
-  for (auto const & list_uuid : uuids) {
+bool uuidInVector(const uuid_d& uuid, const std::vector<uuid_d>& uuids) {
+  for (auto const& list_uuid : uuids) {
     if (list_uuid == uuid) return true;
   }
   return false;
@@ -116,7 +107,6 @@ TEST_F(TestSFSSQLiteObjects, CreateAndGet) {
   ASSERT_TRUE(ret_object.has_value());
   compareObjects(object, *ret_object);
 }
-
 
 TEST_F(TestSFSSQLiteObjects, ListObjectsIDs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
@@ -184,7 +174,6 @@ TEST_F(TestSFSSQLiteObjects, ListBucketsIDsPerBucket) {
   ASSERT_EQ(objects_ids.size(), 1);
   EXPECT_EQ(objects_ids[0], test_object_3.uuid);
 }
-
 
 TEST_F(TestSFSSQLiteObjects, remove_object) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
@@ -311,19 +300,27 @@ TEST_F(TestSFSSQLiteObjects, CreateObjectForNonExistingBucket) {
   SQLiteObjects db_objects(conn);
   auto storage = conn->get_storage();
 
-  DBObject db_object;
+  DBOPObjectInfo db_object;
 
-  db_object.object_id = "254ddc1a-06a6-11ed-b939-0242ac120002";
+  uuid_d uuid_obj;
+  uuid_obj.parse("254ddc1a-06a6-11ed-b939-0242ac120002");
+  db_object.uuid = uuid_obj;
   db_object.name = "test";
 
-  EXPECT_THROW({
-    try {
-        storage.replace(db_object);;
-    } catch( const std::system_error & e ) {
-        EXPECT_STREQ( "FOREIGN KEY constraint failed: constraint failed", e.what() );
-        throw;
-    }
-  }, std::system_error );
+  EXPECT_THROW(
+      {
+        try {
+          storage.replace(db_object);
+          ;
+        } catch (const std::system_error& e) {
+          EXPECT_STREQ(
+              "FOREIGN KEY constraint failed: constraint failed", e.what()
+          );
+          throw;
+        }
+      },
+      std::system_error
+  );
 }
 
 TEST_F(TestSFSSQLiteObjects, GetObjectByBucketAndObjectName) {
@@ -341,20 +338,29 @@ TEST_F(TestSFSSQLiteObjects, GetObjectByBucketAndObjectName) {
   auto db_objects = std::make_shared<SQLiteObjects>(conn);
 
   // create objects with names "test1", "test2" and "test3"... in bucket "test_bucket"
-  auto object_1 = createTestObject("1", ceph_context.get()); // name is "test1", bucket is "test_bucket"
+  auto object_1 = createTestObject(
+      "1", ceph_context.get()
+  );  // name is "test1", bucket is "test_bucket"
   db_objects->store_object(object_1);
-  auto object_2 = createTestObject("2", ceph_context.get()); // name is "test2", bucket is "test_bucket"
+  auto object_2 = createTestObject(
+      "2", ceph_context.get()
+  );  // name is "test2", bucket is "test_bucket"
   db_objects->store_object(object_2);
-  auto object_3 = createTestObject("3", ceph_context.get()); // name is "test3", bucket is "test_bucket"
+  auto object_3 = createTestObject(
+      "3", ceph_context.get()
+  );  // name is "test3", bucket is "test_bucket"
   db_objects->store_object(object_3);
 
   // create object "test1" in bucket "test_bucket_2"
-  auto object_1_2 = createTestObject("1", ceph_context.get()); // name is "test3", bucket is "test_bucket"
+  auto object_1_2 = createTestObject(
+      "1", ceph_context.get()
+  );  // name is "test3", bucket is "test_bucket"
   object_1_2.bucket_id = "test_bucket_2";
   db_objects->store_object(object_1_2);
 
   // run a few queries
-  auto ret_object = db_objects->get_object("test_bucket", "this_object_does_not_exist");
+  auto ret_object =
+      db_objects->get_object("test_bucket", "this_object_does_not_exist");
   ASSERT_FALSE(ret_object.has_value());
 
   ret_object = db_objects->get_object("test_bucket", "test1");

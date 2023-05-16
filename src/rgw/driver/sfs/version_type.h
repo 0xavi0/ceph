@@ -4,21 +4,24 @@
  * Ceph - scalable distributed file system
  * SFS SAL implementation
  *
- * Copyright (C) 2022 SUSE LLC
+ * Copyright (C) 2023 SUSE LLC
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2.1, as published by the Free Software
  * Foundation. See file COPYING.
  */
-#pragma once
+#ifndef RGW_SFS_VERSION_TYPE_H
+#define RGW_SFS_VERSION_TYPE_H
 
-#include "object_definitions.h"
+namespace rgw::sal::sfs {
 
-namespace rgw::sal::sfs::sqlite {
+enum class VersionType {
+  REGULAR = 0,
+  DELETE_MARKER,
+  LAST_VALUE = DELETE_MARKER
+};
 
-// Functions that convert DB type to RGW type (and vice-versa)
-DBOPObjectInfo get_rgw_object(const DBObject& object);
-DBObject get_db_object(const DBOPObjectInfo& object);
+}  // namespace rgw::sal::sfs
 
-}  // namespace rgw::sal::sfs::sqlite
+#endif  // RGW_SFS_VERSION_TYPE_H

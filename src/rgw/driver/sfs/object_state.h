@@ -14,7 +14,7 @@
 #ifndef RGW_SFS_OBJECT_STATE_H
 #define RGW_SFS_OBJECT_STATE_H
 
-namespace rgw::sal {
+namespace rgw::sal::sfs {
 
 enum class ObjectState {
   OPEN = 0,
@@ -24,6 +24,6 @@ enum class ObjectState {
   LAST_VALUE = DELETED
 };
 
-}  // namespace rgw::sal
+}  // namespace rgw::sal::sfs
 
 #endif  // RGW_SFS_OBJECT_STATE_H

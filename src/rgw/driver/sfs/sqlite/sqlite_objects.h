@@ -14,7 +14,6 @@
 #pragma once
 
 #include "dbconn.h"
-#include "objects/object_conversions.h"
 
 namespace rgw::sal::sfs::sqlite {
 

@@ -1,19 +1,19 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
-#include "rgw/driver/sfs/sqlite/sqlite_objects.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-#include "rgw/driver/sfs/sqlite/versioned_object/versioned_object_conversions.h"
-
-#include "rgw/rgw_sal_sfs.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_objects.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
+#include "rgw/driver/sfs/sqlite/versioned_object/versioned_object_conversions.h"
+#include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -22,13 +22,17 @@ const static std::string TEST_DIR = "rgw_sfs_tests";
 
 const static std::string TEST_USERNAME = "test_username";
 const static std::string TEST_BUCKET = "test_bucket";
-const static std::string TEST_OBJECT_ID = "80943a6d-9f72-4001-bac0-a9a036be8c49";
-const static std::string TEST_OBJECT_ID_1 = "9f06d9d3-307f-4c98-865b-cd3b087acc4f";
-const static std::string TEST_OBJECT_ID_2 = "af06d9d3-307f-4c98-865b-cd3b087acc4f";
-const static std::string TEST_OBJECT_ID_3 = "bf06d9d3-307f-4c98-865b-cd3b087acc4f";
+const static std::string TEST_OBJECT_ID =
+    "80943a6d-9f72-4001-bac0-a9a036be8c49";
+const static std::string TEST_OBJECT_ID_1 =
+    "9f06d9d3-307f-4c98-865b-cd3b087acc4f";
+const static std::string TEST_OBJECT_ID_2 =
+    "af06d9d3-307f-4c98-865b-cd3b087acc4f";
+const static std::string TEST_OBJECT_ID_3 =
+    "bf06d9d3-307f-4c98-865b-cd3b087acc4f";
 
 class TestSFSSQLiteVersionedObjects : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -44,24 +48,24 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
-  void createUser(const std::string & username, DBConnRef conn) {
+  void createUser(const std::string& username, DBConnRef conn) {
     SQLiteUsers users(conn);
     DBOPUserInfo user;
     user.uinfo.user_id.id = username;
     users.store_user(user);
   }
 
-  void createBucket(const std::string & username, const std::string & bucketname, DBConnRef conn) {
+  void createBucket(
+      const std::string& username, const std::string& bucketname, DBConnRef conn
+  ) {
     createUser(username, conn);
     SQLiteBuckets buckets(conn);
     DBOPBucketInfo bucket;
@@ -72,11 +76,8 @@ protected:
   }
 
   void createObject(
-    const std::string & username,
-    const std::string & bucketname,
-    const std::string object_id,
-    CephContext *context,
-    DBConnRef conn
+      const std::string& username, const std::string& bucketname,
+      const std::string object_id, CephContext* context, DBConnRef conn
   ) {
     createBucket(username, bucketname, conn);
     SQLiteObjects objects(conn);
@@ -85,28 +86,29 @@ protected:
     object.uuid.parse(object_id.c_str());
     object.bucket_id = bucketname;
     object.name = "test_name";
-    object.size = rand();
-    object.etag = "test_etag";
-    object.mtime = ceph::real_clock::now();
-    object.set_mtime = ceph::real_clock::now();
-    object.delete_at = ceph::real_clock::now();
     objects.store_object(object);
   }
 };
 
-DBOPVersionedObjectInfo createTestVersionedObject(uint id, const std::string & object_id, const std::string & suffix) {
+DBOPVersionedObjectInfo createTestVersionedObject(
+    uint id, const std::string& object_id, const std::string& suffix
+) {
   DBOPVersionedObjectInfo test_versioned_object;
   test_versioned_object.id = id;
   uuid_d uuid;
   uuid.parse(object_id.c_str());
   test_versioned_object.object_id = uuid;
   test_versioned_object.checksum = "test_checksum_" + suffix;
-  test_versioned_object.deletion_time = ceph::real_clock::now();
   test_versioned_object.size = rand();
-  test_versioned_object.creation_time = ceph::real_clock::now();
-  test_versioned_object.object_state = rgw::sal::ObjectState::OPEN;
+  test_versioned_object.create_time = ceph::real_clock::now();
+  test_versioned_object.delete_time = ceph::real_clock::now();
+  test_versioned_object.commit_time = ceph::real_clock::now();
+  test_versioned_object.mtime = ceph::real_clock::now();
+  test_versioned_object.object_state = rgw::sal::sfs::ObjectState::OPEN;
   test_versioned_object.version_id = "test_version_id_" + suffix;
   test_versioned_object.etag = "test_etag_" + suffix;
+  test_versioned_object.version_type =
+      rgw::sal::sfs::VersionType::DELETE_MARKER;
 
   //set attrs with default ACL
   {
@@ -125,7 +127,10 @@ DBOPVersionedObjectInfo createTestVersionedObject(uint id, const std::string & o
   return test_versioned_object;
 }
 
-void compareVersionedObjectsAttrs(const std::optional<rgw::sal::Attrs> & origin, const std::optional<rgw::sal::Attrs> & dest) {
+void compareVersionedObjectsAttrs(
+    const std::optional<rgw::sal::Attrs>& origin,
+    const std::optional<rgw::sal::Attrs>& dest
+) {
   ASSERT_EQ(origin.has_value(), true);
   ASSERT_EQ(origin.has_value(), dest.has_value());
   auto orig_acl_bl_it = origin->find(RGW_ATTR_ACL);
@@ -142,17 +147,21 @@ void compareVersionedObjectsAttrs(const std::optional<rgw::sal::Attrs> & origin,
   ASSERT_EQ(orig_aclp, dest_aclp);
 }
 
-void compareVersionedObjects(const DBOPVersionedObjectInfo & origin, const DBOPVersionedObjectInfo & dest) {
+void compareVersionedObjects(
+    const DBOPVersionedObjectInfo& origin, const DBOPVersionedObjectInfo& dest
+) {
   ASSERT_EQ(origin.id, dest.id);
   ASSERT_EQ(origin.object_id, dest.object_id);
   ASSERT_EQ(origin.checksum, dest.checksum);
-  ASSERT_EQ(origin.deletion_time, dest.deletion_time);
   ASSERT_EQ(origin.size, dest.size);
-  ASSERT_EQ(origin.creation_time, dest.creation_time);
+  ASSERT_EQ(origin.create_time, dest.create_time);
+  ASSERT_EQ(origin.delete_time, dest.delete_time);
+  ASSERT_EQ(origin.commit_time, dest.commit_time);
   ASSERT_EQ(origin.object_state, dest.object_state);
   ASSERT_EQ(origin.version_id, dest.version_id);
   ASSERT_EQ(origin.etag, dest.etag);
   compareVersionedObjectsAttrs(origin.attrs, dest.attrs);
+  ASSERT_EQ(origin.version_type, dest.version_type);
 }
 
 TEST_F(TestSFSSQLiteVersionedObjects, CreateAndGet) {
@@ -165,7 +174,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndGet) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto versioned_object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -173,12 +182,14 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndGet) {
   db_versioned_objects->insert_versioned_object(versioned_object);
   EXPECT_TRUE(fs::exists(getDBFullPath()));
 
-  auto ret_ver_object = db_versioned_objects->get_versioned_object(versioned_object.id);
+  auto ret_ver_object =
+      db_versioned_objects->get_versioned_object(versioned_object.id);
   ASSERT_TRUE(ret_ver_object.has_value());
   compareVersionedObjects(versioned_object, *ret_ver_object);
 
   // get by version id
-  ret_ver_object = db_versioned_objects->get_versioned_object("test_version_id_1");
+  ret_ver_object =
+      db_versioned_objects->get_versioned_object("test_version_id_1");
   ASSERT_TRUE(ret_ver_object.has_value());
   compareVersionedObjects(versioned_object, *ret_ver_object);
 }
@@ -192,7 +203,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, ListObjectsIDs) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
@@ -230,13 +241,13 @@ TEST_F(TestSFSSQLiteVersionedObjects, ListBucketsIDsPerObject) {
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
 
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_1, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_1, ceph_context.get(), conn
   );
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
   );
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_3, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_3, ceph_context.get(), conn
   );
 
   auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
@@ -278,7 +289,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, RemoveObject) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
@@ -310,7 +321,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, RemoveObjectThatDoesNotExist) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
@@ -345,7 +356,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto versioned_object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -353,7 +364,8 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
   db_versioned_objects->insert_versioned_object(versioned_object);
   EXPECT_TRUE(fs::exists(getDBFullPath()));
 
-  auto ret_ver_object = db_versioned_objects->get_versioned_object(versioned_object.id);
+  auto ret_ver_object =
+      db_versioned_objects->get_versioned_object(versioned_object.id);
   ASSERT_TRUE(ret_ver_object.has_value());
   compareVersionedObjects(versioned_object, *ret_ver_object);
 
@@ -366,7 +378,8 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
   db_versioned_objects->insert_versioned_object(new_versioned);
 
   // get the first version
-  ret_ver_object = db_versioned_objects->get_versioned_object(versioned_object.id);
+  ret_ver_object =
+      db_versioned_objects->get_versioned_object(versioned_object.id);
   ASSERT_TRUE(ret_ver_object.has_value());
   ASSERT_EQ(original_size, ret_ver_object->size);
   versioned_object.size = original_size;
@@ -398,7 +411,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetExisting) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -424,7 +437,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateObjectForNonExistingBucket) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   SQLiteVersionedObjects db_objects(conn);
@@ -433,18 +446,26 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateObjectForNonExistingBucket) {
   DBVersionedObject db_object;
 
   db_object.id = 1;
-  db_object.object_id = "254ddc1a-06a6-11ed-b939-0242ac120002";
+  uuid_d uuid_val;
+  uuid_val.parse("254ddc1a-06a6-11ed-b939-0242ac120002");
+  db_object.object_id = uuid_val;
   db_object.checksum = "test";
   db_object.size = rand();
 
-  EXPECT_THROW({
-    try {
-        storage.replace(db_object);;
-    } catch( const std::system_error & e ) {
-        EXPECT_STREQ( "FOREIGN KEY constraint failed: constraint failed", e.what() );
-        throw;
-    }
-  }, std::system_error );
+  EXPECT_THROW(
+      {
+        try {
+          storage.replace(db_object);
+          ;
+        } catch (const std::system_error& e) {
+          EXPECT_STREQ(
+              "FOREIGN KEY constraint failed: constraint failed", e.what()
+          );
+          throw;
+        }
+      },
+      std::system_error
+  );
 }
 
 TEST_F(TestSFSSQLiteVersionedObjects, Testobject_stateConversion) {
@@ -455,7 +476,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, Testobject_stateConversion) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   SQLiteVersionedObjects db_objects(conn);
@@ -463,59 +484,28 @@ TEST_F(TestSFSSQLiteVersionedObjects, Testobject_stateConversion) {
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
   auto db_object = get_db_versioned_object(object);
-  ASSERT_EQ(0, db_object.object_state);
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::OPEN, db_object.object_state);
 
-  db_object.object_state = 1;
+  db_object.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
   storage.replace(db_object);
 
   auto ret_object = db_objects.get_versioned_object(db_object.id);
   ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::ObjectState::COMMITTED, ret_object->object_state);
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::COMMITTED, ret_object->object_state);
 
-  db_object.object_state = 2;
+  db_object.object_state = rgw::sal::sfs::ObjectState::LOCKED;
   storage.replace(db_object);
 
   ret_object = db_objects.get_versioned_object(db_object.id);
   ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::ObjectState::LOCKED, ret_object->object_state);
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::LOCKED, ret_object->object_state);
 
-  db_object.object_state = 3;
+  db_object.object_state = rgw::sal::sfs::ObjectState::DELETED;
   storage.replace(db_object);
 
   ret_object = db_objects.get_versioned_object(db_object.id);
   ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::ObjectState::DELETED, ret_object->object_state);
-}
-
-TEST_F(TestSFSSQLiteVersionedObjects, Testobject_stateBadValue) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-
-  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
-
-  // Create the object, we need it because of foreign key constrains
-  createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
-  );
-
-  SQLiteVersionedObjects db_objects(conn);
-  auto storage = conn->get_storage();
-
-  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
-  auto db_object = get_db_versioned_object(object);
-  ASSERT_EQ(0, db_object.object_state);
-
-  db_object.object_state = 10;
-  storage.replace(db_object);
-
-  EXPECT_THROW({
-    try {
-        auto ret_object = db_objects.get_versioned_object(db_object.id);
-    } catch( const std::system_error & e ) {
-        EXPECT_STREQ( "incorrect state found (10)", e.what() );
-        throw;
-    }
-  }, std::runtime_error );
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::DELETED, ret_object->object_state);
 }
 
 TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
@@ -529,7 +519,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -588,7 +578,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -615,7 +605,8 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
   uuid_d uuid_that_does_not_exist;
   uuid_that_does_not_exist.parse(TEST_OBJECT_ID_2.c_str());
 
-  ret_object = db_versioned_objects->get_last_versioned_object(uuid_that_does_not_exist);
+  ret_object =
+      db_versioned_objects->get_last_versioned_object(uuid_that_does_not_exist);
   ASSERT_FALSE(ret_object.has_value());
 }
 
@@ -630,7 +621,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestInsertIncreaseID) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -680,7 +671,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdate) {
 
   // Create the object, we need it because of foreign key constrains
   createObject(
-    TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
   );
 
   auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
@@ -690,7 +681,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdate) {
   ASSERT_TRUE(ret_ver_object.has_value());
   compareVersionedObjects(object, *ret_ver_object);
 
-  object.object_state = rgw::sal::ObjectState::OPEN;
+  object.object_state = rgw::sal::sfs::ObjectState::OPEN;
   db_versioned_objects->store_versioned_object(object);
 
   ret_ver_object = db_versioned_objects->get_versioned_object(1);
@@ -699,4 +690,51 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdate) {
 
   ret_ver_object = db_versioned_objects->get_versioned_object(2);
   ASSERT_FALSE(ret_ver_object.has_value());
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  // Create the object, we need it because of foreign key constrains
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  SQLiteVersionedObjects db_versions(conn);
+  auto storage = conn->get_storage();
+
+  DBVersionedObject db_version;
+
+  db_version.id = 1;
+  uuid_d uuid_val;
+  uuid_val.parse(TEST_OBJECT_ID.c_str());
+  db_version.object_id = uuid_val;
+  db_version.checksum = "test";
+  db_version.size = rand();
+
+  // our max supported value is int64::max
+  uint64_t nanos_int64_plus_one =
+      static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1;
+  db_version.create_time =
+      ceph::real_time(std::chrono::nanoseconds(nanos_int64_plus_one));
+
+  EXPECT_THROW(
+      {
+        try {
+          storage.replace(db_version);
+          ;
+        } catch (const std::runtime_error& e) {
+          EXPECT_STREQ(
+              "Error converting ceph::real_time to int64. Nanoseconds value: "
+              "9223372036854775808 is out of range",
+              e.what()
+          );
+          throw;
+        }
+      },
+      std::runtime_error
+  );
 }

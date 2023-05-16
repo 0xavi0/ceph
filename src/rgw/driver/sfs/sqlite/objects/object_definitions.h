@@ -15,32 +15,15 @@
 
 #include <string>
 
+#include "rgw/driver/sfs/sqlite/bindings/uuid_d.h"
 #include "rgw_common.h"
 
 namespace rgw::sal::sfs::sqlite {
-
-using BLOB = std::vector<char>;
-
-struct DBObject {
-  std::string object_id;
-  std::string bucket_id;
-  std::string name;
-  std::optional<size_t> size;
-  std::optional<std::string> etag;
-  std::optional<BLOB> mtime;
-  std::optional<BLOB> set_mtime;
-  std::optional<BLOB> delete_at_time;
-};
 
 struct DBOPObjectInfo {
   uuid_d uuid;
   std::string bucket_id;
   std::string name;
-  size_t size;
-  std::string etag;
-  ceph::real_time mtime;
-  ceph::real_time set_mtime;
-  ceph::real_time delete_at;
 };
 
 }  // namespace rgw::sal::sfs::sqlite

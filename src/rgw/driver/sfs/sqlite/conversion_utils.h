@@ -13,6 +13,7 @@
  */
 #pragma once
 
+#include "rgw_common.h"
 namespace rgw::sal::sfs::sqlite {
 
 template <typename BLOB_HOLDER, typename DEST>

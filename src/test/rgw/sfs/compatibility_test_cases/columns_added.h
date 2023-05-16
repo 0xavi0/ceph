@@ -1,5 +1,8 @@
-#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/bindings/enum.h"
+#include "rgw/driver/sfs/sqlite/bindings/real_time.h"
+#include "rgw/driver/sfs/sqlite/bindings/uuid_d.h"
 #include "rgw/driver/sfs/sqlite/conversion_utils.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -73,34 +76,49 @@ struct DBTestBucket {
   // bool deleted;
 };
 
-struct DBTestObject {
-  std::string object_id;
+struct DBOPTestObjectInfo {
+  uuid_d uuid;
   std::string bucket_id;
   std::string name;
-  std::optional<size_t> size;
-  std::optional<std::string> etag;
-  std::optional<BLOB> mtime;
-  std::optional<BLOB> set_mtime;
-  std::optional<BLOB> delete_at_time;
 };
 
 struct DBTestVersionedObject {
   uint id;
   std::string object_id;
   std::string checksum;
-  BLOB deletion_time;
   size_t size;
-  BLOB creation_time;
-  uint object_state;
+  ceph::real_time create_time;
+  ceph::real_time delete_time;
+  ceph::real_time commit_time;
+  ceph::real_time mtime;
+  rgw::sal::sfs::ObjectState object_state;
   std::string version_id;
   std::string etag;
   std::optional<BLOB> attrs;
+  rgw::sal::sfs::VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
 };
 
-inline auto _make_test_storage(const std::string &path) {
-  return sqlite_orm::make_storage(path,
-    sqlite_orm::make_table(std::string(USERS_TABLE),
-          sqlite_orm::make_column("user_id", &DBTestUser::user_id, sqlite_orm::primary_key()),
+struct DBOPTestLCHead {
+  std::string lc_index;  // primary key
+  std::string marker;
+  long start_date;
+};
+
+struct DBOPTestLCEntry {
+  std::string lc_index;     // composite primary key
+  std::string bucket_name;  // composite primary key
+  uint64_t start_time;
+  uint32_t status;
+};
+
+inline auto _make_test_storage(const std::string& path) {
+  return sqlite_orm::make_storage(
+      path,
+      sqlite_orm::make_table(
+          std::string(USERS_TABLE),
+          sqlite_orm::make_column(
+              "user_id", &DBTestUser::user_id, sqlite_orm::primary_key()
+          ),
           sqlite_orm::make_column("tenant", &DBTestUser::tenant),
           sqlite_orm::make_column("ns", &DBTestUser::ns),
           sqlite_orm::make_column("display_name", &DBTestUser::display_name),
@@ -114,20 +132,34 @@ inline auto _make_test_storage(const std::string &path) {
           sqlite_orm::make_column("user_caps", &DBTestUser::user_caps),
           sqlite_orm::make_column("admin", &DBTestUser::admin),
           sqlite_orm::make_column("system", &DBTestUser::system),
-          sqlite_orm::make_column("placement_name", &DBTestUser::placement_name),
-          sqlite_orm::make_column("placement_storage_class", &DBTestUser::placement_storage_class),
-          sqlite_orm::make_column("placement_tags", &DBTestUser::placement_tags),
+          sqlite_orm::make_column(
+              "placement_name", &DBTestUser::placement_name
+          ),
+          sqlite_orm::make_column(
+              "placement_storage_class", &DBTestUser::placement_storage_class
+          ),
+          sqlite_orm::make_column(
+              "placement_tags", &DBTestUser::placement_tags
+          ),
           sqlite_orm::make_column("bucket_quota", &DBTestUser::bucket_quota),
           sqlite_orm::make_column("temp_url_keys", &DBTestUser::temp_url_keys),
           sqlite_orm::make_column("user_quota", &DBTestUser::user_quota),
           sqlite_orm::make_column("type", &DBTestUser::type),
           sqlite_orm::make_column("mfa_ids", &DBTestUser::mfa_ids),
-          sqlite_orm::make_column("assumed_role_arn", &DBTestUser::assumed_role_arn),
+          sqlite_orm::make_column(
+              "assumed_role_arn", &DBTestUser::assumed_role_arn
+          ),
           sqlite_orm::make_column("user_attrs", &DBTestUser::user_attrs),
           sqlite_orm::make_column("user_version", &DBTestUser::user_version),
-          sqlite_orm::make_column("user_version_tag", &DBTestUser::user_version_tag)),
-    sqlite_orm::make_table(std::string(BUCKETS_TABLE),
-          sqlite_orm::make_column("bucket_id", &DBTestBucket::bucket_id, sqlite_orm::primary_key()),
+          sqlite_orm::make_column(
+              "user_version_tag", &DBTestUser::user_version_tag
+          )
+      ),
+      sqlite_orm::make_table(
+          std::string(BUCKETS_TABLE),
+          sqlite_orm::make_column(
+              "bucket_id", &DBTestBucket::bucket_id, sqlite_orm::primary_key()
+          ),
           sqlite_orm::make_column("bucket_name", &DBTestBucket::bucket_name),
           sqlite_orm::make_column("tenant", &DBTestBucket::tenant),
           sqlite_orm::make_column("marker", &DBTestBucket::marker),
@@ -135,40 +167,96 @@ inline auto _make_test_storage(const std::string &path) {
           sqlite_orm::make_column("flags", &DBTestBucket::flags),
           sqlite_orm::make_column("zone_group", &DBTestBucket::zone_group),
           sqlite_orm::make_column("quota", &DBTestBucket::quota),
-          sqlite_orm::make_column("creation_time", &DBTestBucket::creation_time),
-          sqlite_orm::make_column("placement_name", &DBTestBucket::placement_name),
-          sqlite_orm::make_column("placement_storage_class", &DBTestBucket::placement_storage_class),
+          sqlite_orm::make_column(
+              "creation_time", &DBTestBucket::creation_time
+          ),
+          sqlite_orm::make_column(
+              "placement_name", &DBTestBucket::placement_name
+          ),
+          sqlite_orm::make_column(
+              "placement_storage_class", &DBTestBucket::placement_storage_class
+          ),
           // this column will be added
           // sqlite_orm::make_column("deleted", &DBTestBucket::deleted),
           sqlite_orm::make_column("bucket_attrs", &DBTestBucket::bucket_attrs),
-          sqlite_orm::foreign_key(&DBTestBucket::owner_id).references(&DBTestUser::user_id)),
-    sqlite_orm::make_table(std::string(OBJECTS_TABLE),
-          sqlite_orm::make_column("object_id", &DBTestObject::object_id, sqlite_orm::primary_key()),
-          sqlite_orm::make_column("bucket_id", &DBTestObject::bucket_id),
-          sqlite_orm::make_column("name", &DBTestObject::name),
-          sqlite_orm::make_column("size", &DBTestObject::size),
-          sqlite_orm::make_column("etag", &DBTestObject::etag),
-          sqlite_orm::make_column("mtime", &DBTestObject::mtime),
-          sqlite_orm::make_column("set_mtime", &DBTestObject::set_mtime),
-          sqlite_orm::make_column("delete_at_time", &DBTestObject::delete_at_time),
-          sqlite_orm::foreign_key(&DBTestObject::bucket_id).references(&DBTestBucket::bucket_id)),
-    sqlite_orm::make_table(std::string(VERSIONED_OBJECTS_TABLE),
-          sqlite_orm::make_column("id", &DBTestVersionedObject::id, sqlite_orm::autoincrement(), sqlite_orm::primary_key()),
-          sqlite_orm::make_column("object_id", &DBTestVersionedObject::object_id),
+          sqlite_orm::make_column("object_lock", &DBTestBucket::object_lock),
+          sqlite_orm::foreign_key(&DBTestBucket::owner_id)
+              .references(&DBTestUser::user_id)
+      ),
+      sqlite_orm::make_table(
+          std::string(OBJECTS_TABLE),
+          sqlite_orm::make_column(
+              "uuid", &DBOPTestObjectInfo::uuid, sqlite_orm::primary_key()
+          ),
+          sqlite_orm::make_column("bucket_id", &DBOPTestObjectInfo::bucket_id),
+          sqlite_orm::make_column("name", &DBOPTestObjectInfo::name),
+          sqlite_orm::foreign_key(&DBOPTestObjectInfo::bucket_id)
+              .references(&DBTestBucket::bucket_id)
+      ),
+      sqlite_orm::make_table(
+          std::string(VERSIONED_OBJECTS_TABLE),
+          sqlite_orm::make_column(
+              "id", &DBTestVersionedObject::id, sqlite_orm::autoincrement(),
+              sqlite_orm::primary_key()
+          ),
+          sqlite_orm::make_column(
+              "object_id", &DBTestVersionedObject::object_id
+          ),
           sqlite_orm::make_column("checksum", &DBTestVersionedObject::checksum),
-          sqlite_orm::make_column("deletion_time", &DBTestVersionedObject::deletion_time),
           sqlite_orm::make_column("size", &DBTestVersionedObject::size),
-          sqlite_orm::make_column("creation_time", &DBTestVersionedObject::creation_time),
-          sqlite_orm::make_column("object_state", &DBTestVersionedObject::object_state),
-          sqlite_orm::make_column("version_id", &DBTestVersionedObject::version_id),
+          sqlite_orm::make_column(
+              "creation_time", &DBTestVersionedObject::create_time
+          ),
+          sqlite_orm::make_column(
+              "deletion_time", &DBTestVersionedObject::delete_time
+          ),
+          sqlite_orm::make_column(
+              "commit_time", &DBTestVersionedObject::commit_time
+          ),
+          sqlite_orm::make_column("mtime", &DBTestVersionedObject::mtime),
+          sqlite_orm::make_column(
+              "object_state", &DBTestVersionedObject::object_state
+          ),
+          sqlite_orm::make_column(
+              "version_id", &DBTestVersionedObject::version_id
+          ),
           sqlite_orm::make_column("etag", &DBTestVersionedObject::etag),
           sqlite_orm::make_column("attrs", &DBTestVersionedObject::attrs),
-          sqlite_orm::foreign_key(&DBTestVersionedObject::object_id).references(&DBTestObject::object_id)),
-    sqlite_orm::make_table(std::string(ACCESS_KEYS),
-          sqlite_orm::make_column("id", &DBAccessKey::id, sqlite_orm::autoincrement(), sqlite_orm::primary_key()),
-          sqlite_orm::make_column("access_key", &DBAccessKey::access_key),
-          sqlite_orm::make_column("user_id", &DBAccessKey::user_id),
-          sqlite_orm::foreign_key(&DBAccessKey::user_id).references(&DBTestUser::user_id))
+          sqlite_orm::make_column(
+              "version_type", &DBTestVersionedObject::version_type
+          ),
+          sqlite_orm::foreign_key(&DBTestVersionedObject::object_id)
+              .references(&DBOPTestObjectInfo::uuid)
+      ),
+      sqlite_orm::make_table(
+          std::string(ACCESS_KEYS),
+          sqlite_orm::make_column(
+              "id", &DBTestAccessKey::id, sqlite_orm::autoincrement(),
+              sqlite_orm::primary_key()
+          ),
+          sqlite_orm::make_column("access_key", &DBTestAccessKey::access_key),
+          sqlite_orm::make_column("user_id", &DBTestAccessKey::user_id),
+          sqlite_orm::foreign_key(&DBTestAccessKey::user_id)
+              .references(&DBTestUser::user_id)
+      ),
+      sqlite_orm::make_table(
+          std::string(LC_HEAD_TABLE),
+          sqlite_orm::make_column(
+              "lc_index", &DBOPTestLCHead::lc_index, sqlite_orm::primary_key()
+          ),
+          sqlite_orm::make_column("marker", &DBOPTestLCHead::marker),
+          sqlite_orm::make_column("start_date", &DBOPTestLCHead::start_date)
+      ),
+      sqlite_orm::make_table(
+          std::string(LC_ENTRIES_TABLE),
+          sqlite_orm::make_column("lc_index", &DBOPTestLCEntry::lc_index),
+          sqlite_orm::make_column("bucket_name", &DBOPTestLCEntry::bucket_name),
+          sqlite_orm::make_column("start_time", &DBOPTestLCEntry::start_time),
+          sqlite_orm::make_column("status", &DBOPTestLCEntry::status),
+          sqlite_orm::primary_key(
+              &DBOPTestLCEntry::lc_index, &DBOPTestLCEntry::bucket_name
+          )
+      )
   );
 }
 
@@ -178,19 +266,20 @@ struct TestDB {
   TestStorage storage;
   DBTestUser test_user;
   DBTestBucket test_bucket;
-  DBTestObject test_object;
+  DBOPTestObjectInfo test_object;
   DBTestVersionedObject test_version;
 
-  explicit TestDB(const std::string & db_full_path)
-    : storage(_make_test_storage(db_full_path))
-  {
+  explicit TestDB(const std::string& db_full_path)
+      : storage(_make_test_storage(db_full_path)) {
     storage.on_open = [](sqlite3* db) {
       sqlite3_extended_result_codes(db, 1);
       sqlite3_busy_timeout(db, 10000);
-      sqlite3_exec(db,
-                   "PRAGMA journal_mode=WAL;PRAGMA synchronous=normal;"
-                   "PRAGMA temp_store = memory;PRAGMA mmap_size = 30000000000;",
-                   0, 0, 0);
+      sqlite3_exec(
+          db,
+          "PRAGMA journal_mode=WAL;PRAGMA synchronous=normal;"
+          "PRAGMA temp_store = memory;PRAGMA mmap_size = 30000000000;",
+          0, 0, 0
+      );
     };
     storage.open_forever();
     storage.busy_timeout(5000);
@@ -211,9 +300,11 @@ struct TestDB {
     return bucket;
   }
 
-  DBTestObject get_test_object() {
-    DBTestObject object;
-    object.object_id = "9f06d9d3-307f-4c98-865b-cd3b087acc4f";
+  DBOPTestObjectInfo get_test_object() {
+    DBOPTestObjectInfo object;
+    uuid_d uuid_val;
+    uuid_val.parse("9f06d9d3-307f-4c98-865b-cd3b087acc4f");
+    object.uuid = uuid_val;
     object.bucket_id = "bucket1_id";
     object.name = "object_name";
     return object;
@@ -224,41 +315,44 @@ struct TestDB {
     version.id = 1;
     version.object_id = "9f06d9d3-307f-4c98-865b-cd3b087acc4f";
     version.checksum = "checksum1";
-    encode_blob(ceph::real_clock::now(), version.deletion_time);
+    version.delete_time = ceph::real_clock::now();
     version.size = rand();
-    encode_blob(ceph::real_clock::now(), version.creation_time);
-    version.object_state = 2;
+    version.create_time = ceph::real_clock::now();
+    version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
     version.version_id = "version_id_1";
     return version;
   }
 
-  bool compareUser(const DBTestUser & user1, const DBTestUser & user2) {
+  bool compareUser(const DBTestUser& user1, const DBTestUser& user2) {
     if (user1.user_id != user2.user_id) return false;
     return true;
   }
 
-  bool compareBucket(const DBTestBucket & bucket1, const DBTestBucket & bucket2) {
+  bool compareBucket(const DBTestBucket& bucket1, const DBTestBucket& bucket2) {
     if (bucket1.bucket_id != bucket2.bucket_id) return false;
     if (bucket1.bucket_name != bucket2.bucket_name) return false;
     if (bucket1.owner_id != bucket2.owner_id) return false;
     return true;
   }
 
-  bool compareObject(const DBTestObject & obj1, const DBTestObject & obj2) {
-    if (obj1.object_id != obj2.object_id) return false;
+  bool compareObject(
+      const DBOPTestObjectInfo& obj1, const DBOPTestObjectInfo& obj2
+  ) {
+    if (obj1.uuid != obj2.uuid) return false;
     if (obj1.bucket_id != obj2.bucket_id) return false;
     if (obj1.name != obj2.name) return false;
     return true;
   }
 
-  bool compareVersion(const DBTestVersionedObject & v1,
-                      const DBTestVersionedObject & v2) {
+  bool compareVersion(
+      const DBTestVersionedObject& v1, const DBTestVersionedObject& v2
+  ) {
     if (v1.version_id != v2.version_id) return false;
     if (v1.object_id != v2.object_id) return false;
     if (v1.checksum != v2.checksum) return false;
-    if (v1.deletion_time != v2.deletion_time) return false;
+    if (v1.delete_time != v2.delete_time) return false;
     if (v1.size != v2.size) return false;
-    if (v1.creation_time != v2.creation_time) return false;
+    if (v1.create_time != v2.create_time) return false;
     if (v1.object_state != v2.object_state) return false;
     if (v1.version_id != v2.version_id) return false;
     return true;
@@ -285,7 +379,7 @@ struct TestDB {
     auto users = storage.get_all<DBTestUser>();
     if (users.size() != 1) return false;
 
-    auto objs = storage.get_all<DBTestObject>();
+    auto objs = storage.get_all<DBOPTestObjectInfo>();
     if (objs.size() != 1) return false;
 
     auto versions = storage.get_all<DBTestVersionedObject>();
@@ -299,7 +393,7 @@ struct TestDB {
     if (!user) return false;
     if (!compareUser(*user, test_user)) return false;
 
-    auto object = storage.get_pointer<DBTestObject>(test_object.object_id);
+    auto object = storage.get_pointer<DBOPTestObjectInfo>(test_object.uuid);
     if (!object) return false;
     if (!compareObject(*object, test_object)) return false;
 
@@ -309,7 +403,6 @@ struct TestDB {
 
     return true;
   }
-
 };
 
-} //  namespace rgw::test::metadata::new_columns_added
+}  // namespace rgw::test::metadata::columns_added

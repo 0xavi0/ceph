@@ -24,7 +24,6 @@ set(sfs_srcs
     sqlite/sqlite_lifecycle.cc
     sqlite/users/users_conversions.cc
     sqlite/buckets/bucket_conversions.cc
-    sqlite/objects/object_conversions.cc
     sqlite/versioned_object/versioned_object_conversions.cc
     sqlite/dbconn.cc
     bucket.cc

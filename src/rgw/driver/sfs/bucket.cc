@@ -85,7 +85,7 @@ int SFSBucket::list(
 
     auto last_version =
         db_versioned_objects.get_last_versioned_object(objref->path.get_uuid());
-    if (last_version->object_state == rgw::sal::ObjectState::COMMITTED) {
+    if (last_version->object_state == rgw::sal::sfs::ObjectState::COMMITTED) {
       // check for delimiter
       if (check_add_common_prefix(dpp, objref->name, params, 0, results, y)) {
         continue;
@@ -128,13 +128,13 @@ int SFSBucket::list_versions(
       rgw_bucket_dir_entry dirent;
       dirent.key = cls_rgw_obj_key(objref->name, object_version.version_id);
       dirent.meta.accounted_size = object_version.size;
-      dirent.meta.mtime = object_version.creation_time;
+      dirent.meta.mtime = object_version.create_time;
       dirent.meta.etag = object_version.etag;
       dirent.flags = rgw_bucket_dir_entry::FLAG_VER;
       if (last_version.has_value() && last_version->id == object_version.id) {
         dirent.flags |= rgw_bucket_dir_entry::FLAG_CURRENT;
       }
-      if (object_version.object_state == rgw::sal::ObjectState::DELETED) {
+      if (object_version.object_state == rgw::sal::sfs::ObjectState::DELETED) {
         dirent.flags |= rgw_bucket_dir_entry::FLAG_DELETE_MARKER;
       }
       dirent.meta.owner_display_name = bucket->get_owner().display_name;
@@ -243,7 +243,7 @@ int SFSBucket::check_empty(const DoutPrefixProvider* dpp, optional_yield y) {
   sfs::sqlite::SQLiteVersionedObjects db_versions(store->db_conn);
   for (const auto& obj : objects) {
     auto last_version = db_versions.get_last_versioned_object(obj);
-    if (last_version->object_state != rgw::sal::ObjectState::DELETED) {
+    if (last_version->object_state != rgw::sal::sfs::ObjectState::DELETED) {
       ldpp_dout(dpp, -1) << __func__ << ": Bucket Not Empty.." << dendl;
       return -ENOTEMPTY;
     }

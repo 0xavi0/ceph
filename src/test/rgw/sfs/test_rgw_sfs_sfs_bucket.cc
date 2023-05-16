@@ -1,17 +1,17 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-
-#include "rgw/rgw_sal_sfs.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/rgw_sal_sfs.h"
 
 /*
   HINT
@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 const static std::string TEST_DIR = "rgw_sfs_tests";
 
 class TestSFSBucket : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -40,17 +40,15 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
-  void createUser(const std::string & username, DBConnRef conn) {
+  void createUser(const std::string& username, DBConnRef conn) {
     SQLiteUsers users(conn);
     DBOPUserInfo user;
     user.uinfo.user_id.id = username;
@@ -59,11 +57,11 @@ protected:
   }
 
   std::shared_ptr<rgw::sal::sfs::Object> createTestObject(
-                                                const std::string & bucket_id,
-                                                const std::string & name,
-                                                DBConnRef conn) {
+      const std::string& bucket_id, const std::string& name, DBConnRef conn
+  ) {
     auto object = std::shared_ptr<rgw::sal::sfs::Object>(
-	rgw::sal::sfs::Object::create_for_testing(name));
+        rgw::sal::sfs::Object::create_for_testing(name)
+    );
     SQLiteObjects db_objects(conn);
     DBOPObjectInfo db_object;
     db_object.uuid = object->path.get_uuid();
@@ -73,9 +71,9 @@ protected:
     return object;
   }
 
-  void createTestBucket(const std::string & bucket_id,
-                        const std::string & user_id,
-                        DBConnRef conn) {
+  void createTestBucket(
+      const std::string& bucket_id, const std::string& user_id, DBConnRef conn
+  ) {
     SQLiteBuckets db_buckets(conn);
     DBOPBucketInfo bucket;
     bucket.binfo.bucket.name = bucket_id + "_name";
@@ -85,21 +83,22 @@ protected:
     db_buckets.store_bucket(bucket);
   }
 
-  void createTestObjectVersion(std::shared_ptr<rgw::sal::sfs::Object> & object,
-                               uint version,
-                               DBConnRef conn) {
+  void createTestObjectVersion(
+      std::shared_ptr<rgw::sal::sfs::Object>& object, uint version,
+      DBConnRef conn
+  ) {
     object->version_id = version;
     SQLiteVersionedObjects db_versioned_objects(conn);
     DBOPVersionedObjectInfo db_version;
     db_version.id = version;
     db_version.object_id = object->path.get_uuid();
-    db_version.object_state = rgw::sal::ObjectState::COMMITTED;
+    db_version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
     db_version.version_id = std::to_string(version);
     db_versioned_objects.insert_versioned_object(db_version);
   }
 };
 
-RGWAccessControlPolicy get_aclp_default(){
+RGWAccessControlPolicy get_aclp_default() {
   RGWAccessControlPolicy aclp;
   rgw_user aclu("usr_id");
   aclp.get_acl().create_default(aclu, "usr_id");
@@ -110,10 +109,10 @@ RGWAccessControlPolicy get_aclp_default(){
   return aclp;
 }
 
-RGWAccessControlPolicy get_aclp_1(){
+RGWAccessControlPolicy get_aclp_1() {
   RGWAccessControlPolicy aclp;
   rgw_user aclu("usr_id");
-  RGWAccessControlList &acl = aclp.get_acl();
+  RGWAccessControlList& acl = aclp.get_acl();
   ACLGrant aclg;
   rgw_user gusr("usr_id_2");
   aclg.set_canon(gusr, "usr_id_2", (RGW_PERM_READ_OBJS | RGW_PERM_WRITE_OBJS));
@@ -125,14 +124,15 @@ RGWAccessControlPolicy get_aclp_1(){
   return aclp;
 }
 
-RGWBucketInfo get_binfo(){
+RGWBucketInfo get_binfo() {
   RGWBucketInfo arg_info;
   return arg_info;
 }
 
-void compareListEntry(const rgw_bucket_dir_entry & entry,
-                      std::shared_ptr<rgw::sal::sfs::Object> object,
-                      const std::string & username) {
+void compareListEntry(
+    const rgw_bucket_dir_entry& entry,
+    std::shared_ptr<rgw::sal::sfs::Object> object, const std::string& username
+) {
   EXPECT_EQ(entry.key.name, object->name);
   EXPECT_EQ(entry.meta.etag, object->get_meta().etag);
   EXPECT_EQ(entry.meta.mtime, object->get_meta().mtime);
@@ -172,31 +172,37 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                false,                      //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(existed, false);
   EXPECT_EQ(bucket_from_create->get_tenant(), "t_id");
   EXPECT_EQ(bucket_from_create->get_name(), "b_name");
   EXPECT_EQ(bucket_from_create->get_placement_rule().name, "default");
   EXPECT_EQ(bucket_from_create->get_placement_rule().storage_class, "STANDARD");
-  EXPECT_NE(bucket_from_create->get_attrs().find(RGW_ATTR_ACL), bucket_from_create->get_attrs().end());
+  EXPECT_NE(
+      bucket_from_create->get_attrs().find(RGW_ATTR_ACL),
+      bucket_from_create->get_attrs().end()
+  );
 
   EXPECT_FALSE(arg_info.flags & BUCKET_VERSIONED);
   EXPECT_FALSE(arg_info.flags & BUCKET_OBJ_LOCK_ENABLED);
@@ -213,7 +219,6 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
 
   //@warning this triggers segfault
   //EXPECT_EQ(bucket_from_create->get_owner()->get_id().id, "usr_id");
-
 }
 
 TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
@@ -248,36 +253,42 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                false,                      //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(*bucket_from_store, *bucket_from_create);
-  EXPECT_NE(bucket_from_store->get_attrs().find(RGW_ATTR_ACL), bucket_from_store->get_attrs().end());
+  EXPECT_NE(
+      bucket_from_store->get_attrs().find(RGW_ATTR_ACL),
+      bucket_from_store->get_attrs().end()
+  );
 
   auto acl_bl_it = bucket_from_store->get_attrs().find(RGW_ATTR_ACL);
   {
@@ -322,52 +333,52 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                false,                      //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   RGWAccessControlPolicy arg_aclp_1 = get_aclp_1();
 
-  EXPECT_EQ(bucket_from_store->set_acl(&ndp,
-                                       arg_aclp_1,
-                                       null_yield),
-            0);
+  EXPECT_EQ(bucket_from_store->set_acl(&ndp, arg_aclp_1, null_yield), 0);
 
   EXPECT_NE(bucket_from_store->get_acl(), bucket_from_create->get_acl());
   EXPECT_EQ(bucket_from_store->get_acl(), get_aclp_1());
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store_1;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(),
-                            arg_info.bucket,
-                            &bucket_from_store_1,
-                            null_yield),
-          0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store_1, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(bucket_from_store->get_acl(), bucket_from_store_1->get_acl());
 }
@@ -404,33 +415,36 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                false,                      //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   rgw::sal::Attrs new_attrs;
   RGWAccessControlPolicy arg_aclp_1 = get_aclp_1();
@@ -440,10 +454,9 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
     new_attrs[RGW_ATTR_ACL] = acl_bl;
   }
 
-  EXPECT_EQ(bucket_from_store->merge_and_store_attrs(&ndp,
-                                                     new_attrs,
-                                                     null_yield),
-            0);
+  EXPECT_EQ(
+      bucket_from_store->merge_and_store_attrs(&ndp, new_attrs, null_yield), 0
+  );
 
   EXPECT_EQ(bucket_from_store->get_attrs(), new_attrs);
   EXPECT_NE(bucket_from_store->get_acl(), bucket_from_create->get_acl());
@@ -451,12 +464,12 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store_1;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(),
-                            arg_info.bucket,
-                            &bucket_from_store_1,
-                            null_yield),
-          0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store_1, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(bucket_from_store_1->get_attrs(), new_attrs);
   EXPECT_EQ(bucket_from_store->get_acl(), bucket_from_store_1->get_acl());
@@ -494,33 +507,36 @@ TEST_F(TestSFSBucket, DeleteBucket) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                false,                      //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(*bucket_from_store, *bucket_from_create);
 
@@ -532,20 +548,18 @@ TEST_F(TestSFSBucket, DeleteBucket) {
   ASSERT_TRUE(b_metadata.has_value());
   EXPECT_FALSE(b_metadata->deleted);
 
-  EXPECT_EQ(bucket_from_store->remove_bucket(&ndp,
-                                             true,
-                                             false,
-                                             nullptr,
-                                             null_yield),
-            0);
+  EXPECT_EQ(
+      bucket_from_store->remove_bucket(&ndp, true, false, nullptr, null_yield),
+      0
+  );
 
   // after removing bucket should not be available anymore
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            -ENOENT);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      -ENOENT
+  );
 
   // Also verify in metadata that the bucket has the deleted marker
   b_metadata = db_buckets->get_bucket(bucket_from_create->get_bucket_id());
@@ -554,31 +568,34 @@ TEST_F(TestSFSBucket, DeleteBucket) {
 
   // now create the bucket again (should be ok, but bucket_id should differ)
   auto prev_bucket_id = bucket_from_create->get_bucket_id();
-  EXPECT_EQ(user->create_bucket(&ndp,                     //dpp
-                              arg_bucket,                 //b
-                              "zg1",                      //zonegroup_id
-                              arg_pl_rule,                //placement_rule
-                              arg_swift_ver_location,     //swift_ver_location
-                              &arg_quota_info,            //pquota_info
-                              arg_aclp,                   //policy
-                              arg_attrs,                  //attrs
-                              arg_info,                   //info
-                              arg_objv,                   //ep_objv
-                              false,                      //exclusive
-                              false,                      //obj_lock_enabled
-                              &existed,                   //existed
-                              arg_req_info,               //req_info
-                              &bucket_from_create,        //bucket
-                              null_yield                  //optional_yield
-                              ),
-          0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(*bucket_from_store, *bucket_from_create);
   EXPECT_NE(prev_bucket_id, bucket_from_create->get_bucket_id());
@@ -593,7 +610,6 @@ TEST_F(TestSFSBucket, DeleteBucket) {
   ASSERT_EQ(metadata_same_name.size(), 2);
   ASSERT_TRUE(metadata_same_name[0].deleted);
   ASSERT_FALSE(metadata_same_name[1].deleted);
-
 }
 
 TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
@@ -640,12 +656,12 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   arg_info.bucket.name = "test_bucket_name";
   arg_info.bucket.bucket_id = "test_bucket";
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
-  EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(),
-                            arg_info.bucket,
-                            &bucket_from_store,
-                            null_yield),
-          0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   ASSERT_NE(bucket_from_store, nullptr);
 
@@ -655,21 +671,17 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   params.prefix = "";
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results,
-                                    null_yield),
-          0);
+  EXPECT_EQ(bucket_from_store->list(&ndp, params, 0, results, null_yield), 0);
 
-  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>> expected_objects;
+  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
+      expected_objects;
   expected_objects[object1->name] = object1;
   expected_objects[object2->name] = object2;
   expected_objects[object3->name] = object3;
   expected_objects[object4->name] = object4;
   auto nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results.objs.size());
-  for (auto & ret_obj : results.objs) {
+  for (auto& ret_obj : results.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -682,12 +694,12 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   // list with 'folder/' prefix
   params.prefix = "folder/";
   rgw::sal::Bucket::ListResults results_folder_prefix;
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_folder_prefix,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_folder_prefix, null_yield
+      ),
+      0
+  );
 
   expected_objects.clear();
   expected_objects[object1->name] = object1;
@@ -695,7 +707,7 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   expected_objects[object3->name] = object3;
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results_folder_prefix.objs.size());
-  for (auto & ret_obj : results_folder_prefix.objs) {
+  for (auto& ret_obj : results_folder_prefix.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -708,18 +720,15 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   // list with 'ob' prefix
   params.prefix = "ob";
   rgw::sal::Bucket::ListResults results_ob_prefix;
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_ob_prefix,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 0, results_ob_prefix, null_yield), 0
+  );
 
   expected_objects.clear();
   expected_objects[object4->name] = object4;
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results_ob_prefix.objs.size());
-  for (auto & ret_obj : results_ob_prefix.objs) {
+  for (auto& ret_obj : results_ob_prefix.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -729,19 +738,15 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   // ensure all objects expected were found
   EXPECT_EQ(expected_objects.size(), nb_found_objects);
 
-
   // list all versions
   // list with empty prefix
   params.prefix = "";
   params.list_versions = true;
   rgw::sal::Bucket::ListResults results_versions;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_versions,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 0, results_versions, null_yield), 0
+  );
   // we'll find 4 objects with 2 versions each (8 entries)
   EXPECT_EQ(8, results_versions.objs.size());
   expected_objects.clear();
@@ -751,7 +756,7 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   expected_objects[object4->name] = object4;
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results.objs.size());
-  for (auto & ret_obj : results_versions.objs) {
+  for (auto& ret_obj : results_versions.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -765,12 +770,12 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   params.prefix = "folder/";
   params.list_versions = true;
   rgw::sal::Bucket::ListResults results_versions_folder_prefix;
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_versions_folder_prefix,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_versions_folder_prefix, null_yield
+      ),
+      0
+  );
 
   expected_objects.clear();
   expected_objects[object1->name] = object1;
@@ -779,7 +784,7 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   nb_found_objects = 0;
   // 3 objects match the prefix with 2 versions each
   EXPECT_EQ(6, results_versions_folder_prefix.objs.size());
-  for (auto & ret_obj : results_versions_folder_prefix.objs) {
+  for (auto& ret_obj : results_versions_folder_prefix.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -789,23 +794,24 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   // ensure all objects expected were found
   EXPECT_EQ(expected_objects.size() * 2, nb_found_objects);
 
-
   // list versions with 'ob' prefix
   params.prefix = "ob";
   params.list_versions = true;
   rgw::sal::Bucket::ListResults results_versions_ob_prefix;
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_versions_ob_prefix,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_versions_ob_prefix, null_yield
+      ),
+      0
+  );
 
   expected_objects.clear();
   expected_objects[object4->name] = object4;
   nb_found_objects = 0;
-  EXPECT_EQ(expected_objects.size() * 2, results_versions_ob_prefix.objs.size());
-  for (auto & ret_obj : results_versions_ob_prefix.objs) {
+  EXPECT_EQ(
+      expected_objects.size() * 2, results_versions_ob_prefix.objs.size()
+  );
+  for (auto& ret_obj : results_versions_ob_prefix.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -817,7 +823,6 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
 }
 
 TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
-
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
@@ -843,15 +848,19 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   createTestObjectVersion(object1, version_id++, store->db_conn);
   createTestObjectVersion(object1, version_id++, store->db_conn);
 
-  auto object2 = createTestObject("test_bucket", "directory/directory/", store->db_conn);
+  auto object2 =
+      createTestObject("test_bucket", "directory/directory/", store->db_conn);
   createTestObjectVersion(object2, version_id++, store->db_conn);
   createTestObjectVersion(object2, version_id++, store->db_conn);
 
-  auto object3 = createTestObject("test_bucket", "directory/directory/file", store->db_conn);
+  auto object3 = createTestObject(
+      "test_bucket", "directory/directory/file", store->db_conn
+  );
   createTestObjectVersion(object3, version_id++, store->db_conn);
   createTestObjectVersion(object3, version_id++, store->db_conn);
 
-  auto object4 = createTestObject("test_bucket", "directory/file", store->db_conn);
+  auto object4 =
+      createTestObject("test_bucket", "directory/file", store->db_conn);
   createTestObjectVersion(object4, version_id++, store->db_conn);
   createTestObjectVersion(object4, version_id++, store->db_conn);
 
@@ -870,12 +879,12 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   arg_info.bucket.name = "test_bucket_name";
   arg_info.bucket.bucket_id = "test_bucket";
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
-  EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(),
-                            arg_info.bucket,
-                            &bucket_from_store,
-                            null_yield),
-          0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   ASSERT_NE(bucket_from_store, nullptr);
 
@@ -886,15 +895,11 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   params.delim = "";
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results,
-                                    null_yield),
-          0);
+  EXPECT_EQ(bucket_from_store->list(&ndp, params, 0, results, null_yield), 0);
 
   // we expect to get all the objects
-  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>> expected_objects;
+  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
+      expected_objects;
   expected_objects[object1->name] = object1;
   expected_objects[object2->name] = object2;
   expected_objects[object3->name] = object3;
@@ -902,7 +907,7 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   expected_objects[object5->name] = object5;
   auto nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results.objs.size());
-  for (auto & ret_obj : results.objs) {
+  for (auto& ret_obj : results.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -919,41 +924,43 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   params.delim = "i";
   rgw::sal::Bucket::ListResults results_delimiter_i;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_i,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 0, results_delimiter_i, null_yield),
+      0
+  );
 
   // we expect zero objects
   EXPECT_EQ(results_delimiter_i.objs.size(), 0);
 
   // check common_prefixes (should be fi and di)
   EXPECT_EQ(results_delimiter_i.common_prefixes.size(), 2);
-  EXPECT_NE(results_delimiter_i.common_prefixes.find("fi"),
-            results_delimiter_i.common_prefixes.end());
-  EXPECT_NE(results_delimiter_i.common_prefixes.find("di"),
-            results_delimiter_i.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_i.common_prefixes.find("fi"),
+      results_delimiter_i.common_prefixes.end()
+  );
+  EXPECT_NE(
+      results_delimiter_i.common_prefixes.find("di"),
+      results_delimiter_i.common_prefixes.end()
+  );
 
   // use delimiter '/'
   params.prefix = "";
   params.delim = "/";
   rgw::sal::Bucket::ListResults results_delimiter_slash;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_slash,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_slash, null_yield
+      ),
+      0
+  );
 
   // we expect only the "file" oject (the rest are aggregated in common prefix)
   expected_objects.clear();
   expected_objects[object5->name] = object5;
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results_delimiter_slash.objs.size());
-  for (auto & ret_obj : results_delimiter_slash.objs) {
+  for (auto& ret_obj : results_delimiter_slash.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -965,32 +972,34 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
 
   // check common_prefixes
   EXPECT_EQ(results_delimiter_slash.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_slash.common_prefixes.find("directory/"),
-            results_delimiter_slash.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_slash.common_prefixes.find("directory/"),
+      results_delimiter_slash.common_prefixes.end()
+  );
 
   // use delimiter '/directory'
   params.prefix = "";
   params.delim = "/directory";
   rgw::sal::Bucket::ListResults results_delimiter_directory;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_directory,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_directory, null_yield
+      ),
+      0
+  );
 
   // we expect
   // directory/
   // directory/file
   // file
   expected_objects.clear();
-  expected_objects[object1->name] = object1; //  directory/
-  expected_objects[object4->name] = object4; //  directory/file
-  expected_objects[object5->name] = object5; //  file
+  expected_objects[object1->name] = object1;  //  directory/
+  expected_objects[object4->name] = object4;  //  directory/file
+  expected_objects[object5->name] = object5;  //  file
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size(), results_delimiter_directory.objs.size());
-  for (auto & ret_obj : results_delimiter_directory.objs) {
+  for (auto& ret_obj : results_delimiter_directory.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -1002,29 +1011,32 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
 
   // check common_prefixes
   EXPECT_EQ(results_delimiter_directory.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_directory.common_prefixes.find("directory/directory"),
-            results_delimiter_directory.common_prefixes.end());
-
+  EXPECT_NE(
+      results_delimiter_directory.common_prefixes.find("directory/directory"),
+      results_delimiter_directory.common_prefixes.end()
+  );
 
   // use delimiter 'i' and prefix 'd'
   params.prefix = "d";
   params.delim = "i";
   rgw::sal::Bucket::ListResults results_delimiter_i_prefix_d;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_i_prefix_d,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_i_prefix_d, null_yield
+      ),
+      0
+  );
 
   // we expect zero objects
   EXPECT_EQ(results_delimiter_i_prefix_d.objs.size(), 0);
 
   // check common_prefixes (should be fi and di)
   EXPECT_EQ(results_delimiter_i_prefix_d.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_i_prefix_d.common_prefixes.find("di"),
-            results_delimiter_i_prefix_d.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_i_prefix_d.common_prefixes.find("di"),
+      results_delimiter_i_prefix_d.common_prefixes.end()
+  );
 }
 
 TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
@@ -1053,15 +1065,19 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   createTestObjectVersion(object1, version_id++, store->db_conn);
   createTestObjectVersion(object1, version_id++, store->db_conn);
 
-  auto object2 = createTestObject("test_bucket", "directory/directory/", store->db_conn);
+  auto object2 =
+      createTestObject("test_bucket", "directory/directory/", store->db_conn);
   createTestObjectVersion(object2, version_id++, store->db_conn);
   createTestObjectVersion(object2, version_id++, store->db_conn);
 
-  auto object3 = createTestObject("test_bucket", "directory/directory/file", store->db_conn);
+  auto object3 = createTestObject(
+      "test_bucket", "directory/directory/file", store->db_conn
+  );
   createTestObjectVersion(object3, version_id++, store->db_conn);
   createTestObjectVersion(object3, version_id++, store->db_conn);
 
-  auto object4 = createTestObject("test_bucket", "directory/file", store->db_conn);
+  auto object4 =
+      createTestObject("test_bucket", "directory/file", store->db_conn);
   createTestObjectVersion(object4, version_id++, store->db_conn);
   createTestObjectVersion(object4, version_id++, store->db_conn);
 
@@ -1080,12 +1096,12 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   arg_info.bucket.name = "test_bucket_name";
   arg_info.bucket.bucket_id = "test_bucket";
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
-  EXPECT_EQ(store->get_bucket(&ndp,
-                            user.get(),
-                            arg_info.bucket,
-                            &bucket_from_store,
-                            null_yield),
-          0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   ASSERT_NE(bucket_from_store, nullptr);
 
@@ -1097,15 +1113,11 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   params.list_versions = true;
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results,
-                                    null_yield),
-          0);
+  EXPECT_EQ(bucket_from_store->list(&ndp, params, 0, results, null_yield), 0);
 
   // we expect to get all the objects
-  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>> expected_objects;
+  std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
+      expected_objects;
   expected_objects[object1->name] = object1;
   expected_objects[object2->name] = object2;
   expected_objects[object3->name] = object3;
@@ -1114,7 +1126,7 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   auto nb_found_objects = 0;
   // we have 2 versions per object
   EXPECT_EQ(expected_objects.size() * 2, results.objs.size());
-  for (auto & ret_obj : results.objs) {
+  for (auto& ret_obj : results.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -1131,41 +1143,43 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   params.delim = "i";
   rgw::sal::Bucket::ListResults results_delimiter_i;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_i,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 0, results_delimiter_i, null_yield),
+      0
+  );
 
   // we expect zero objects
   EXPECT_EQ(results_delimiter_i.objs.size(), 0);
 
   // check common_prefixes (should be fi and di)
   EXPECT_EQ(results_delimiter_i.common_prefixes.size(), 2);
-  EXPECT_NE(results_delimiter_i.common_prefixes.find("fi"),
-            results_delimiter_i.common_prefixes.end());
-  EXPECT_NE(results_delimiter_i.common_prefixes.find("di"),
-            results_delimiter_i.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_i.common_prefixes.find("fi"),
+      results_delimiter_i.common_prefixes.end()
+  );
+  EXPECT_NE(
+      results_delimiter_i.common_prefixes.find("di"),
+      results_delimiter_i.common_prefixes.end()
+  );
 
   // use delimiter '/'
   params.prefix = "";
   params.delim = "/";
   rgw::sal::Bucket::ListResults results_delimiter_slash;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_slash,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_slash, null_yield
+      ),
+      0
+  );
 
   // we expect only the "file" oject (the rest are aggregated in common prefix)
   expected_objects.clear();
   expected_objects[object5->name] = object5;
   nb_found_objects = 0;
   EXPECT_EQ(expected_objects.size() * 2, results_delimiter_slash.objs.size());
-  for (auto & ret_obj : results_delimiter_slash.objs) {
+  for (auto& ret_obj : results_delimiter_slash.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -1177,32 +1191,36 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
 
   // check common_prefixes
   EXPECT_EQ(results_delimiter_slash.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_slash.common_prefixes.find("directory/"),
-            results_delimiter_slash.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_slash.common_prefixes.find("directory/"),
+      results_delimiter_slash.common_prefixes.end()
+  );
 
   // use delimiter '/directory'
   params.prefix = "";
   params.delim = "/directory";
   rgw::sal::Bucket::ListResults results_delimiter_directory;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_directory,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_directory, null_yield
+      ),
+      0
+  );
 
   // we expect
   // directory/
   // directory/file
   // file
   expected_objects.clear();
-  expected_objects[object1->name] = object1; //  directory/
-  expected_objects[object4->name] = object4; //  directory/file
-  expected_objects[object5->name] = object5; //  file
+  expected_objects[object1->name] = object1;  //  directory/
+  expected_objects[object4->name] = object4;  //  directory/file
+  expected_objects[object5->name] = object5;  //  file
   nb_found_objects = 0;
-  EXPECT_EQ(expected_objects.size() * 2, results_delimiter_directory.objs.size());
-  for (auto & ret_obj : results_delimiter_directory.objs) {
+  EXPECT_EQ(
+      expected_objects.size() * 2, results_delimiter_directory.objs.size()
+  );
+  for (auto& ret_obj : results_delimiter_directory.objs) {
     auto it = expected_objects.find(ret_obj.key.name);
     if (it != expected_objects.end()) {
       compareListEntry(ret_obj, it->second, "test_user");
@@ -1214,29 +1232,32 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
 
   // check common_prefixes
   EXPECT_EQ(results_delimiter_directory.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_directory.common_prefixes.find("directory/directory"),
-            results_delimiter_directory.common_prefixes.end());
-
+  EXPECT_NE(
+      results_delimiter_directory.common_prefixes.find("directory/directory"),
+      results_delimiter_directory.common_prefixes.end()
+  );
 
   // use delimiter 'i' and prefix 'd'
   params.prefix = "d";
   params.delim = "i";
   rgw::sal::Bucket::ListResults results_delimiter_i_prefix_d;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp,
-                                    params,
-                                    0,
-                                    results_delimiter_i_prefix_d,
-                                    null_yield),
-          0);
+  EXPECT_EQ(
+      bucket_from_store->list(
+          &ndp, params, 0, results_delimiter_i_prefix_d, null_yield
+      ),
+      0
+  );
 
   // we expect zero objects
   EXPECT_EQ(results_delimiter_i_prefix_d.objs.size(), 0);
 
   // check common_prefixes (should be fi and di)
   EXPECT_EQ(results_delimiter_i_prefix_d.common_prefixes.size(), 1);
-  EXPECT_NE(results_delimiter_i_prefix_d.common_prefixes.find("di"),
-            results_delimiter_i_prefix_d.common_prefixes.end());
+  EXPECT_NE(
+      results_delimiter_i_prefix_d.common_prefixes.find("di"),
+      results_delimiter_i_prefix_d.common_prefixes.end()
+  );
 }
 
 TEST_F(TestSFSBucket, UserCreateBucketObjectLockEnabled) {
@@ -1272,37 +1293,42 @@ TEST_F(TestSFSBucket, UserCreateBucketObjectLockEnabled) {
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
 
-  EXPECT_EQ(user->create_bucket(&ndp,                       //dpp
-                                arg_bucket,                 //b
-                                "zg1",                      //zonegroup_id
-                                arg_pl_rule,                //placement_rule
-                                arg_swift_ver_location,     //swift_ver_location
-                                &arg_quota_info,            //pquota_info
-                                arg_aclp,                   //policy
-                                arg_attrs,                  //attrs
-                                arg_info,                   //info
-                                arg_objv,                   //ep_objv
-                                false,                      //exclusive
-                                true,                       //obj_lock_enabled
-                                &existed,                   //existed
-                                arg_req_info,               //req_info
-                                &bucket_from_create,        //bucket
-                                null_yield                  //optional_yield
-                                ),
-            0);
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          true,                    //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
 
   EXPECT_TRUE(arg_info.flags & BUCKET_VERSIONED);
   EXPECT_TRUE(arg_info.flags & BUCKET_OBJ_LOCK_ENABLED);
 
   std::unique_ptr<rgw::sal::Bucket> bucket_from_store;
 
-  EXPECT_EQ(store->get_bucket(&ndp,
-                              user.get(),
-                              arg_info.bucket,
-                              &bucket_from_store,
-                              null_yield),
-            0);
+  EXPECT_EQ(
+      store->get_bucket(
+          &ndp, user.get(), arg_info.bucket, &bucket_from_store, null_yield
+      ),
+      0
+  );
 
   EXPECT_EQ(bucket_from_create->get_info().flags, arg_info.flags);
-  EXPECT_EQ(bucket_from_create->get_info().flags, bucket_from_store->get_info().flags);
+  EXPECT_EQ(
+      bucket_from_create->get_info().flags, bucket_from_store->get_info().flags
+  );
 }

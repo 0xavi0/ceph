@@ -126,11 +126,10 @@ Object* Object::try_create_with_last_version_fetch_from_database(
   result->deleted = (last_version->object_state == ObjectState::DELETED);
   result->version_id = last_version->id;
   result->meta = {
-      .size = obj->size,
-      .etag = obj->etag,
-      .mtime = obj->mtime,
-      .set_mtime = obj->set_mtime,
-      .delete_at = obj->delete_at};
+      .size = last_version->size,
+      .etag = last_version->etag,
+      .mtime = last_version->mtime,
+      .delete_at = last_version->delete_time};
   result->attrs = last_version->attrs;
   result->instance = last_version->version_id;
 
@@ -157,11 +156,10 @@ Object* Object::try_create_fetch_from_database(
   result->deleted = (version->object_state == ObjectState::DELETED);
   result->version_id = version->id;
   result->meta = {
-      .size = obj->size,
-      .etag = obj->etag,
-      .mtime = obj->mtime,
-      .set_mtime = obj->set_mtime,
-      .delete_at = obj->delete_at};
+      .size = version->size,
+      .etag = version->etag,
+      .mtime = version->mtime,
+      .delete_at = version->delete_time};
   result->attrs = version->attrs;
   result->instance = version->version_id;
   return result;
@@ -227,7 +225,7 @@ void Object::metadata_change_version_state(SFStore* store, ObjectState state) {
   versioned_object->object_state = state;
   if (state == ObjectState::DELETED) {
     deleted = true;
-    versioned_object->deletion_time = ceph::real_clock::now();
+    versioned_object->delete_time = ceph::real_clock::now();
   }
   db_versioned_objs.store_versioned_object(*versioned_object);
 }
@@ -245,11 +243,6 @@ void Object::metadata_finish(SFStore* store) {
   auto db_object = dbobjs.get_object(path.get_uuid());
   ceph_assert(db_object.has_value());
   db_object->name = name;
-  db_object->size = meta.size;
-  db_object->etag = meta.etag;
-  db_object->mtime = meta.mtime;
-  db_object->set_mtime = meta.set_mtime;
-  db_object->delete_at = meta.delete_at;
   dbobjs.store_object(*db_object);
 
   sqlite::SQLiteVersionedObjects db_versioned_objs(store->db_conn);
@@ -257,7 +250,9 @@ void Object::metadata_finish(SFStore* store) {
   ceph_assert(db_versioned_object.has_value());
   // TODO calculate checksum. Is it already calculated while writing?
   db_versioned_object->size = meta.size;
-  db_versioned_object->creation_time = meta.mtime;
+  db_versioned_object->create_time = meta.mtime;
+  db_versioned_object->delete_time = meta.delete_at;
+  db_versioned_object->mtime = meta.mtime;
   db_versioned_object->object_state = ObjectState::COMMITTED;
   db_versioned_object->etag = meta.etag;
   db_versioned_object->attrs = get_attrs();
@@ -406,7 +401,7 @@ void Bucket::delete_object(ObjectRef objref, const rgw_obj_key& key) {
     _undelete_object(objref, key, db_versioned_objs, *last_version);
   } else {
     last_version->object_state = ObjectState::DELETED;
-    last_version->deletion_time = ceph::real_clock::now();
+    last_version->delete_time = ceph::real_clock::now();
 
     if (last_version->version_id != "") {
 // generate a new version id
@@ -444,7 +439,7 @@ std::string Bucket::create_non_existing_object_delete_marker(
   version_info.object_id = obj->path.get_uuid();
   version_info.object_state = ObjectState::DELETED;
   version_info.version_id = new_version_id;
-  version_info.deletion_time = ceph::real_clock::now();
+  version_info.delete_time = ceph::real_clock::now();
   sqlite::SQLiteVersionedObjects db_versioned_objs(store->db_conn);
   obj->version_id = db_versioned_objs.insert_versioned_object(version_info);
 
@@ -478,7 +473,7 @@ void Bucket::_undelete_object(
     // non-versioned object
     // just remove the delete marker in the version and store
     last_version.object_state = ObjectState::COMMITTED;
-    last_version.deletion_time = ceph::real_clock::now();
+    last_version.delete_time = ceph::real_clock::now();
     sqlite_versioned_objects.store_versioned_object(last_version);
     objref->deleted = false;
   }

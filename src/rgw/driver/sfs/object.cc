@@ -459,7 +459,7 @@ void SFSObject::_refresh_meta_from_object() {
     auto db_version = db_versioned_objects.get_versioned_object(get_instance());
     if (db_version.has_value()) {
       auto uuid = objref->path.get_uuid();
-      auto deleted = db_version->object_state == ObjectState::DELETED;
+      auto deleted = db_version->object_state == sfs::ObjectState::DELETED;
       objref.reset(sfs::Object::create_for_query(
           get_name(), uuid, deleted, db_version->id
       ));

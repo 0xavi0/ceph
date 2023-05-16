@@ -16,6 +16,9 @@
 #include <string>
 
 #include "rgw/driver/sfs/object_state.h"
+#include "rgw/driver/sfs/sqlite/bindings/enum.h"
+#include "rgw/driver/sfs/sqlite/bindings/real_time.h"
+#include "rgw/driver/sfs/version_type.h"
 #include "rgw/rgw_common.h"
 #include "rgw_common.h"
 
@@ -25,28 +28,34 @@ using BLOB = std::vector<char>;
 
 struct DBVersionedObject {
   uint id;
-  std::string object_id;
+  uuid_d object_id;
   std::string checksum;
-  BLOB deletion_time;
   size_t size;
-  BLOB creation_time;
-  uint object_state;
+  ceph::real_time create_time;
+  ceph::real_time delete_time;
+  ceph::real_time commit_time;
+  ceph::real_time mtime;
+  ObjectState object_state;
   std::string version_id;
   std::string etag;
   std::optional<BLOB> attrs;
+  VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
 };
 
 struct DBOPVersionedObjectInfo {
   uint id;
   uuid_d object_id;
   std::string checksum;
-  ceph::real_time deletion_time;
   size_t size;
-  ceph::real_time creation_time;
+  ceph::real_time create_time;
+  ceph::real_time delete_time;
+  ceph::real_time commit_time;
+  ceph::real_time mtime;
   ObjectState object_state;
   std::string version_id;
   std::string etag;
   rgw::sal::Attrs attrs;
+  VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
 };
 
 }  // namespace rgw::sal::sfs::sqlite

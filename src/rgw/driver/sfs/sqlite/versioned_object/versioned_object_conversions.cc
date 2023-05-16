@@ -34,15 +34,18 @@ DBOPVersionedObjectInfo get_rgw_versioned_object(const DBVersionedObject& object
 ) {
   DBOPVersionedObjectInfo rgw_object;
   rgw_object.id = object.id;
-  rgw_object.object_id.parse(object.object_id.c_str());
+  rgw_object.object_id = object.object_id;
   rgw_object.checksum = object.checksum;
-  decode_blob(object.deletion_time, rgw_object.deletion_time);
   rgw_object.size = object.size;
-  decode_blob(object.creation_time, rgw_object.creation_time);
-  rgw_object.object_state = get_object_state(object.object_state);
+  rgw_object.create_time = object.create_time;
+  rgw_object.delete_time = object.delete_time;
+  rgw_object.commit_time = object.commit_time;
+  rgw_object.mtime = object.mtime;
+  rgw_object.object_state = object.object_state;
   rgw_object.version_id = object.version_id;
   rgw_object.etag = object.etag;
   assign_optional_value(object.attrs, rgw_object.attrs);
+  rgw_object.version_type = object.version_type;
   return rgw_object;
 }
 
@@ -50,15 +53,18 @@ DBVersionedObject get_db_versioned_object(const DBOPVersionedObjectInfo& object
 ) {
   DBVersionedObject db_object;
   db_object.id = object.id;
-  db_object.object_id = object.object_id.to_string();
+  db_object.object_id = object.object_id;
   db_object.checksum = object.checksum;
-  encode_blob(object.deletion_time, db_object.deletion_time);
   db_object.size = object.size;
-  encode_blob(object.creation_time, db_object.creation_time);
-  db_object.object_state = get_uint_object_state(object.object_state);
+  db_object.create_time = object.create_time;
+  db_object.delete_time = object.delete_time;
+  db_object.commit_time = object.commit_time;
+  db_object.mtime = object.mtime;
+  db_object.object_state = object.object_state;
   db_object.version_id = object.version_id;
   db_object.etag = object.etag;
   assign_db_value(object.attrs, db_object.attrs);
+  db_object.version_type = object.version_type;
   return db_object;
 }
 }  // namespace rgw::sal::sfs::sqlite

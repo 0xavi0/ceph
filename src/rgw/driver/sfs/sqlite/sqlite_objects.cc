@@ -17,46 +17,24 @@ using namespace sqlite_orm;
 
 namespace rgw::sal::sfs::sqlite {
 
-std::vector<uuid_d> get_rgw_uuids(const std::vector<std::string>& uuids) {
-  std::vector<uuid_d> ret_ids;
-  for (auto const& uuid : uuids) {
-    uuid_d rgw_uuid;
-    rgw_uuid.parse(uuid.c_str());
-    ret_ids.push_back(rgw_uuid);
-  }
-  return ret_ids;
-}
-
-std::vector<DBOPObjectInfo> get_rgw_objects(
-    const std::vector<DBObject>& db_objects
-) {
-  std::vector<DBOPObjectInfo> ret_objs;
-  for (const auto& db_obj : db_objects) {
-    auto rgw_obj = get_rgw_object(db_obj);
-    ret_objs.push_back(rgw_obj);
-  }
-  return ret_objs;
-}
-
 SQLiteObjects::SQLiteObjects(DBConnRef _conn) : conn(_conn) {}
 
 std::vector<DBOPObjectInfo> SQLiteObjects::get_objects(
     const std::string& bucket_id
 ) const {
   auto storage = conn->get_storage();
-  auto objects =
-      storage.get_all<DBObject>(where(is_equal(&DBObject::bucket_id, bucket_id))
-      );
-  return get_rgw_objects(objects);
+  return storage.get_all<DBOPObjectInfo>(
+      where(is_equal(&DBOPObjectInfo::bucket_id, bucket_id))
+  );
 }
 
 std::optional<DBOPObjectInfo> SQLiteObjects::get_object(const uuid_d& uuid
 ) const {
   auto storage = conn->get_storage();
-  auto object = storage.get_pointer<DBObject>(uuid.to_string());
+  auto object = storage.get_pointer<DBOPObjectInfo>(uuid.to_string());
   std::optional<DBOPObjectInfo> ret_value;
   if (object) {
-    ret_value = get_rgw_object(*object);
+    ret_value = *object;
   }
   return ret_value;
 }
@@ -65,40 +43,39 @@ std::optional<DBOPObjectInfo> SQLiteObjects::get_object(
     const std::string& bucket_id, const std::string& object_name
 ) const {
   auto storage = conn->get_storage();
-  auto objects = storage.get_all<DBObject>(where(
-      is_equal(&DBObject::bucket_id, bucket_id) and
-      is_equal(&DBObject::name, object_name)
+  auto objects = storage.get_all<DBOPObjectInfo>(where(
+      is_equal(&DBOPObjectInfo::bucket_id, bucket_id) and
+      is_equal(&DBOPObjectInfo::name, object_name)
   ));
   std::optional<DBOPObjectInfo> ret_value;
   // value must be unique
   if (objects.size() == 1) {
-    ret_value = get_rgw_object(objects[0]);
+    ret_value = objects[0];
   }
   return ret_value;
 }
 
 void SQLiteObjects::store_object(const DBOPObjectInfo& object) const {
   auto storage = conn->get_storage();
-  auto db_object = get_db_object(object);
-  storage.replace(db_object);
+  storage.replace(object);
 }
 
 void SQLiteObjects::remove_object(const uuid_d& uuid) const {
   auto storage = conn->get_storage();
-  storage.remove<DBObject>(uuid.to_string());
+  storage.remove<DBOPObjectInfo>(uuid);
 }
 
 std::vector<uuid_d> SQLiteObjects::get_object_ids() const {
   auto storage = conn->get_storage();
-  return get_rgw_uuids(storage.select(&DBObject::object_id));
+  return storage.select(&DBOPObjectInfo::uuid);
 }
 
 std::vector<uuid_d> SQLiteObjects::get_object_ids(const std::string& bucket_id
 ) const {
   auto storage = conn->get_storage();
-  return get_rgw_uuids(storage.select(
-      &DBObject::object_id, where(c(&DBObject::bucket_id) = bucket_id)
-  ));
+  return storage.select(
+      &DBOPObjectInfo::uuid, where(c(&DBOPObjectInfo::bucket_id) = bucket_id)
+  );
 }
 
 }  // namespace rgw::sal::sfs::sqlite
