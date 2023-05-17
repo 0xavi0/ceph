@@ -144,10 +144,10 @@ inline auto _make_storage(const std::string& path) {
           sqlite_orm::make_column("checksum", &DBVersionedObject::checksum),
           sqlite_orm::make_column("size", &DBVersionedObject::size),
           sqlite_orm::make_column(
-              "creation_time", &DBVersionedObject::create_time
+              "create_time", &DBVersionedObject::create_time
           ),
           sqlite_orm::make_column(
-              "deletion_time", &DBVersionedObject::delete_time
+              "delete_time", &DBVersionedObject::delete_time
           ),
           sqlite_orm::make_column(
               "commit_time", &DBVersionedObject::commit_time

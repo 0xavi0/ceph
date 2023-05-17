@@ -203,10 +203,10 @@ inline auto _make_test_storage(const std::string& path) {
           sqlite_orm::make_column("checksum", &DBTestVersionedObject::checksum),
           sqlite_orm::make_column("size", &DBTestVersionedObject::size),
           sqlite_orm::make_column(
-              "creation_time", &DBTestVersionedObject::create_time
+              "create_time", &DBTestVersionedObject::create_time
           ),
           sqlite_orm::make_column(
-              "deletion_time", &DBTestVersionedObject::delete_time
+              "delete_time", &DBTestVersionedObject::delete_time
           ),
           sqlite_orm::make_column(
               "commit_time", &DBTestVersionedObject::commit_time
