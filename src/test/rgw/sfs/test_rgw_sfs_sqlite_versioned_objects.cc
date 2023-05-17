@@ -726,15 +726,16 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
         try {
           storage.replace(db_version);
           ;
-        } catch (const std::runtime_error& e) {
+        } catch (const std::system_error& e) {
           EXPECT_STREQ(
               "Error converting ceph::real_time to int64. Nanoseconds value: "
-              "9223372036854775808 is out of range",
+              "9223372036854775808 is out of range: Numerical result out of "
+              "range",
               e.what()
           );
           throw;
         }
       },
-      std::runtime_error
+      std::system_error
   );
 }

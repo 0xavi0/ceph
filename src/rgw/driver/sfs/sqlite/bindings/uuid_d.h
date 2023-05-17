@@ -42,14 +42,17 @@ struct row_extractor<uuid_d> {
     if (row_value) {
       uuid_d ret_value;
       if (!ret_value.parse(row_value)) {
-        throw std::runtime_error(
+        throw std::system_error(
+            ERANGE, std::system_category(),
             "incorrect uuid string (" + std::string(row_value) + ")"
         );
       }
       return ret_value;
     } else {
       // ! row_value
-      throw std::runtime_error("incorrect uuid string (nullptr)");
+      throw std::system_error(
+          ERANGE, std::system_category(), "incorrect uuid string (nullptr)"
+      );
     }
   }
 

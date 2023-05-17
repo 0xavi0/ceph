@@ -45,7 +45,8 @@ template <class T>
 struct row_extractor<T, typename std::enable_if<std::is_enum_v<T>>::type> {
   T extract(uint row_value) const {
     if (row_value > static_cast<uint>(T::LAST_VALUE)) {
-      throw(std::runtime_error(
+      throw(std::system_error(
+          ERANGE, std::system_category(),
           "Invalid enum value found: (" + std::to_string(row_value) + ")"
       ));
     }
@@ -55,7 +56,8 @@ struct row_extractor<T, typename std::enable_if<std::is_enum_v<T>>::type> {
   T extract(sqlite3_stmt* stmt, int columnIndex) const {
     auto int_value = sqlite3_column_int(stmt, columnIndex);
     if (int_value < 0) {
-      throw(std::runtime_error(
+      throw(std::system_error(
+          ERANGE, std::system_category(),
           "Invalid enum value found: (" + std::to_string(int_value) + ")"
       ));
     }

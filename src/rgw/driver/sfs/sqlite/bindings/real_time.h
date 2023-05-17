@@ -34,7 +34,7 @@ static int64_t time_point_to_int64(const ceph::real_time& t) {
     oss << "Error converting ceph::real_time to int64. "
            "Nanoseconds value: "
         << nanos << " is out of range";
-    throw std::runtime_error(oss.str());
+    throw std::system_error(ERANGE, std::system_category(), oss.str());
   }
   // we can safely static_cast to int64_t now
   return static_cast<int64_t>(nanos);
@@ -48,7 +48,7 @@ static ceph::real_time time_point_from_int64(int64_t value) {
     oss << "Error converting int64 nanoseconds value to "
            "ceph::real_cock::time_point. Value: "
         << value << " is out of range";
-    throw std::runtime_error(oss.str());
+    throw std::system_error(ERANGE, std::system_category(), oss.str());
   }
   uint64_t uint64_nanos = static_cast<uint64_t>(value);
   return ceph::real_time(std::chrono::nanoseconds(uint64_nanos));
