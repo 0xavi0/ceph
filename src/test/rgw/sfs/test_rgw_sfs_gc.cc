@@ -1,23 +1,22 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-
-#include "rgw/driver/sfs/uuid_path.h"
-#include "rgw/driver/sfs/sfs_gc.h"
-
-#include "rgw/rgw_sal_sfs.h"
+#include <gtest/gtest.h>
 
 #include <chrono>
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
 #include <random>
 #include <thread>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sfs_gc.h"
+#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/driver/sfs/uuid_path.h"
+#include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
 using namespace std::this_thread;
@@ -29,7 +28,7 @@ const static std::string TEST_DIR = "rgw_sfs_tests";
 const static std::string TEST_USERNAME = "test_user";
 
 class TestSFSGC : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -45,24 +44,26 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
   std::size_t getStoreDataFileCount() {
     using std::filesystem::recursive_directory_iterator;
     return std::count_if(
         recursive_directory_iterator(getTestDir()),
-        recursive_directory_iterator{}, [](const std::filesystem::path& path) {
-          return (std::filesystem::is_regular_file(path) &&
-                  !path.filename().string().starts_with("s3gw.db"));
-        });
+        recursive_directory_iterator{},
+        [](const std::filesystem::path& path) {
+          return (
+              std::filesystem::is_regular_file(path) &&
+              !path.filename().string().starts_with("s3gw.db")
+          );
+        }
+    );
   }
 
   std::size_t databaseFileExists() {
@@ -76,30 +77,28 @@ protected:
     users.store_user(user);
   }
 
-  void storeRandomObjectVersion(const std::shared_ptr<rgw::sal::sfs::Object> & object) {
+  void storeRandomObjectVersion(
+      const std::shared_ptr<rgw::sal::sfs::Object>& object
+  ) {
     std::filesystem::path object_path =
         getTestDir() / object->get_storage_path();
     std::filesystem::create_directories(object_path.parent_path());
-    auto mode = \
-        std::ofstream::binary | \
-        std::ofstream::out | \
-        std::ofstream::app;
+    auto mode = std::ofstream::binary | std::ofstream::out | std::ofstream::app;
     std::ofstream ofs(object_path, mode);
 
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dist(1, 4096);
     auto file_size = dist(gen);
-    while(file_size) {
-        ofs << dist(gen);
-        --file_size;
+    while (file_size) {
+      ofs << dist(gen);
+      --file_size;
     }
     ofs.flush();
     ofs.close();
   }
 
-  void createTestBucket(const std::string & bucket_id,
-                        DBConnRef conn) {
+  void createTestBucket(const std::string& bucket_id, DBConnRef conn) {
     SQLiteBuckets db_buckets(conn);
     DBOPBucketInfo bucket;
     bucket.binfo.bucket.name = bucket_id + "_name";
@@ -109,21 +108,20 @@ protected:
     db_buckets.store_bucket(bucket);
   }
 
-  bool bucketExists(const std::string & bucket_id,
-                        DBConnRef conn) {
+  bool bucketExists(const std::string& bucket_id, DBConnRef conn) {
     SQLiteBuckets db_buckets(conn);
     auto bucket = db_buckets.get_bucket(bucket_id);
     return bucket.has_value();
   }
 
   std::shared_ptr<rgw::sal::sfs::Object> createTestObject(
-                                                const std::string & bucket_id,
-                                                const std::string & name,
-                                                DBConnRef conn) {
+      const std::string& bucket_id, const std::string& name, DBConnRef conn
+  ) {
     auto object = std::shared_ptr<rgw::sal::sfs::Object>(
-	rgw::sal::sfs::Object::create_for_testing(name));
+        rgw::sal::sfs::Object::create_for_testing(name)
+    );
     SQLiteObjects db_objects(conn);
-    DBOPObjectInfo db_object;
+    DBObject db_object;
     db_object.uuid = object->path.get_uuid();
     db_object.name = name;
     db_object.bucket_id = bucket_id;
@@ -131,13 +129,14 @@ protected:
     return object;
   }
 
-  void createTestObjectVersion(std::shared_ptr<rgw::sal::sfs::Object> & object,
-                               uint version,
-                               DBConnRef conn) {
+  void createTestObjectVersion(
+      std::shared_ptr<rgw::sal::sfs::Object>& object, uint version,
+      DBConnRef conn
+  ) {
     object->version_id = version;
     storeRandomObjectVersion(object);
     SQLiteVersionedObjects db_versioned_objects(conn);
-    DBOPVersionedObjectInfo db_version;
+    DBVersionedObject db_version;
     db_version.id = version;
     db_version.object_id = object->path.get_uuid();
     db_version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
@@ -145,12 +144,13 @@ protected:
     db_versioned_objects.insert_versioned_object(db_version);
   }
 
-  void deleteTestObject(std::shared_ptr<rgw::sal::sfs::Object> & object,
-                        DBConnRef conn) {
+  void deleteTestObject(
+      std::shared_ptr<rgw::sal::sfs::Object>& object, DBConnRef conn
+  ) {
     // delete mark the object
     SQLiteVersionedObjects db_versioned_objects(conn);
-    auto last_version = db_versioned_objects.get_last_versioned_object(
-                                                       object->path.get_uuid());
+    auto last_version =
+        db_versioned_objects.get_last_versioned_object(object->path.get_uuid());
     ASSERT_TRUE(last_version.has_value());
     last_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
     last_version->version_id.append("_next_");
@@ -158,26 +158,29 @@ protected:
     db_versioned_objects.insert_versioned_object(*last_version);
   }
 
-  void deleteTestBucket(const std::string & bucket_id, DBConnRef conn) {
+  void deleteTestBucket(const std::string& bucket_id, DBConnRef conn) {
     SQLiteBuckets db_buckets(conn);
     auto bucket = db_buckets.get_bucket(bucket_id);
     ASSERT_TRUE(bucket.has_value());
 
     SQLiteObjects db_objects(conn);
     auto objects = db_objects.get_objects(bucket_id);
-    for (auto & object: objects) {
-        auto objptr = std::shared_ptr<rgw::sal::sfs::Object>(
-	    rgw::sal::sfs::Object::create_for_immediate_deletion(object));
-        deleteTestObject(objptr, conn);
+    for (auto& object : objects) {
+      auto objptr = std::shared_ptr<rgw::sal::sfs::Object>(
+          rgw::sal::sfs::Object::create_for_immediate_deletion(object)
+      );
+      deleteTestObject(objptr, conn);
     }
     bucket->deleted = true;
     db_buckets.store_bucket(*bucket);
   }
 
-  size_t getNumberObjectsForBucket(const std::string & bucket_id, DBConnRef conn) {
-      SQLiteObjects db_objs(conn);
-      auto objects = db_objs.get_objects(bucket_id);
-      return objects.size();
+  size_t getNumberObjectsForBucket(
+      const std::string& bucket_id, DBConnRef conn
+  ) {
+    SQLiteObjects db_objs(conn);
+    auto objects = db_objs.get_objects(bucket_id);
+    return objects.size();
   }
 };
 
@@ -227,7 +230,7 @@ TEST_F(TestSFSGC, TestDeletedBuckets) {
   // nothing should be removed permanently yet
   EXPECT_EQ(getStoreDataFileCount(), 5);
   EXPECT_TRUE(databaseFileExists());
-  versions = db_versioned_objs.get_versioned_object_ids();
+  versions = db_versioned_objs.get_versioned_object_ids(false);
   // we should have 1 more version (delete marker for 1 object)
   EXPECT_EQ(versions.size(), 6);
 

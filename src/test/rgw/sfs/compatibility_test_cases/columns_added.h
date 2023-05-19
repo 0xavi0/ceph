@@ -76,7 +76,7 @@ struct DBTestBucket {
   // bool deleted;
 };
 
-struct DBOPTestObjectInfo {
+struct DBTestObject {
   uuid_d uuid;
   std::string bucket_id;
   std::string name;
@@ -94,7 +94,7 @@ struct DBTestVersionedObject {
   rgw::sal::sfs::ObjectState object_state;
   std::string version_id;
   std::string etag;
-  std::optional<BLOB> attrs;
+  rgw::sal::Attrs attrs;
   rgw::sal::sfs::VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
 };
 
@@ -114,6 +114,19 @@ struct DBOPTestLCEntry {
 inline auto _make_test_storage(const std::string& path) {
   return sqlite_orm::make_storage(
       path,
+      sqlite_orm::make_unique_index(
+          "versioned_object_objid_vid_unique",
+          &DBTestVersionedObject::object_id, &DBTestVersionedObject::version_id
+      ),
+      sqlite_orm::make_index("bucket_ownerid_idx", &DBTestBucket::owner_id),
+      sqlite_orm::make_index("bucket_name_idx", &DBTestBucket::bucket_name),
+      sqlite_orm::make_index("objects_bucketid_idx", &DBTestObject::bucket_id),
+      sqlite_orm::make_index(
+          "vobjs_versionid_idx", &DBTestVersionedObject::version_id
+      ),
+      sqlite_orm::make_index(
+          "vobjs_object_id_idx", &DBTestVersionedObject::object_id
+      ),
       sqlite_orm::make_table(
           std::string(USERS_TABLE),
           sqlite_orm::make_column(
@@ -186,11 +199,11 @@ inline auto _make_test_storage(const std::string& path) {
       sqlite_orm::make_table(
           std::string(OBJECTS_TABLE),
           sqlite_orm::make_column(
-              "uuid", &DBOPTestObjectInfo::uuid, sqlite_orm::primary_key()
+              "uuid", &DBTestObject::uuid, sqlite_orm::primary_key()
           ),
-          sqlite_orm::make_column("bucket_id", &DBOPTestObjectInfo::bucket_id),
-          sqlite_orm::make_column("name", &DBOPTestObjectInfo::name),
-          sqlite_orm::foreign_key(&DBOPTestObjectInfo::bucket_id)
+          sqlite_orm::make_column("bucket_id", &DBTestObject::bucket_id),
+          sqlite_orm::make_column("name", &DBTestObject::name),
+          sqlite_orm::foreign_key(&DBTestObject::bucket_id)
               .references(&DBTestBucket::bucket_id)
       ),
       sqlite_orm::make_table(
@@ -226,7 +239,7 @@ inline auto _make_test_storage(const std::string& path) {
               "version_type", &DBTestVersionedObject::version_type
           ),
           sqlite_orm::foreign_key(&DBTestVersionedObject::object_id)
-              .references(&DBOPTestObjectInfo::uuid)
+              .references(&DBTestObject::uuid)
       ),
       sqlite_orm::make_table(
           std::string(ACCESS_KEYS),
@@ -266,7 +279,7 @@ struct TestDB {
   TestStorage storage;
   DBTestUser test_user;
   DBTestBucket test_bucket;
-  DBOPTestObjectInfo test_object;
+  DBTestObject test_object;
   DBTestVersionedObject test_version;
 
   explicit TestDB(const std::string& db_full_path)
@@ -300,8 +313,8 @@ struct TestDB {
     return bucket;
   }
 
-  DBOPTestObjectInfo get_test_object() {
-    DBOPTestObjectInfo object;
+  DBTestObject get_test_object() {
+    DBTestObject object;
     uuid_d uuid_val;
     uuid_val.parse("9f06d9d3-307f-4c98-865b-cd3b087acc4f");
     object.uuid = uuid_val;
@@ -335,9 +348,7 @@ struct TestDB {
     return true;
   }
 
-  bool compareObject(
-      const DBOPTestObjectInfo& obj1, const DBOPTestObjectInfo& obj2
-  ) {
+  bool compareObject(const DBTestObject& obj1, const DBTestObject& obj2) {
     if (obj1.uuid != obj2.uuid) return false;
     if (obj1.bucket_id != obj2.bucket_id) return false;
     if (obj1.name != obj2.name) return false;
@@ -379,7 +390,7 @@ struct TestDB {
     auto users = storage.get_all<DBTestUser>();
     if (users.size() != 1) return false;
 
-    auto objs = storage.get_all<DBOPTestObjectInfo>();
+    auto objs = storage.get_all<DBTestObject>();
     if (objs.size() != 1) return false;
 
     auto versions = storage.get_all<DBTestVersionedObject>();
@@ -393,7 +404,7 @@ struct TestDB {
     if (!user) return false;
     if (!compareUser(*user, test_user)) return false;
 
-    auto object = storage.get_pointer<DBOPTestObjectInfo>(test_object.uuid);
+    auto object = storage.get_pointer<DBTestObject>(test_object.uuid);
     if (!object) return false;
     if (!compareObject(*object, test_object)) return false;
 

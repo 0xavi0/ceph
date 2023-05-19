@@ -57,9 +57,7 @@ inline auto _make_storage(const std::string& path) {
       ),
       sqlite_orm::make_index("bucket_ownerid_idx", &DBBucket::owner_id),
       sqlite_orm::make_index("bucket_name_idx", &DBBucket::bucket_name),
-      sqlite_orm::make_index(
-          "objects_bucketid_idx", &DBOPObjectInfo::bucket_id
-      ),
+      sqlite_orm::make_index("objects_bucketid_idx", &DBObject::bucket_id),
       sqlite_orm::make_index(
           "vobjs_versionid_idx", &DBVersionedObject::version_id
       ),
@@ -127,11 +125,11 @@ inline auto _make_storage(const std::string& path) {
       sqlite_orm::make_table(
           std::string(OBJECTS_TABLE),
           sqlite_orm::make_column(
-              "uuid", &DBOPObjectInfo::uuid, sqlite_orm::primary_key()
+              "uuid", &DBObject::uuid, sqlite_orm::primary_key()
           ),
-          sqlite_orm::make_column("bucket_id", &DBOPObjectInfo::bucket_id),
-          sqlite_orm::make_column("name", &DBOPObjectInfo::name),
-          sqlite_orm::foreign_key(&DBOPObjectInfo::bucket_id)
+          sqlite_orm::make_column("bucket_id", &DBObject::bucket_id),
+          sqlite_orm::make_column("name", &DBObject::name),
+          sqlite_orm::foreign_key(&DBObject::bucket_id)
               .references(&DBBucket::bucket_id)
       ),
       sqlite_orm::make_table(
@@ -163,7 +161,7 @@ inline auto _make_storage(const std::string& path) {
               "version_type", &DBVersionedObject::version_type
           ),
           sqlite_orm::foreign_key(&DBVersionedObject::object_id)
-              .references(&DBOPObjectInfo::uuid)
+              .references(&DBObject::uuid)
       ),
       sqlite_orm::make_table(
           std::string(ACCESS_KEYS),

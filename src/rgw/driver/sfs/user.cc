@@ -159,7 +159,7 @@ int SFSUser::create_bucket(
 
   if (store->bucket_exists(b)) {
     *existed = true;
-    return -EEXIST;
+    return 0;
   }
   *existed = false;
 

@@ -25,6 +25,13 @@ void decode_blob(const BLOB_HOLDER& blob_holder, DEST& dest) {
   ceph::decode(dest, buffer);
 }
 
+template <typename DEST>
+void decode_blob(const char* data, size_t data_size, DEST& dest) {
+  bufferlist buffer;
+  buffer.append(data, data_size);
+  ceph::decode(dest, buffer);
+}
+
 template <typename ORIGIN, typename BLOB_HOLDER>
 void encode_blob(const ORIGIN& origin, BLOB_HOLDER& dest) {
   bufferlist buffer;

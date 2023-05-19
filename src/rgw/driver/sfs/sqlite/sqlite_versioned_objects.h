@@ -14,7 +14,7 @@
 #pragma once
 
 #include "dbconn.h"
-#include "versioned_object/versioned_object_conversions.h"
+#include "versioned_object/versioned_object_definitions.h"
 
 namespace rgw::sal::sfs::sqlite {
 
@@ -28,23 +28,61 @@ class SQLiteVersionedObjects {
   SQLiteVersionedObjects(const SQLiteVersionedObjects&) = delete;
   SQLiteVersionedObjects& operator=(const SQLiteVersionedObjects&) = delete;
 
-  std::optional<DBOPVersionedObjectInfo> get_versioned_object(uint id) const;
-  std::optional<DBOPVersionedObjectInfo> get_versioned_object(
+  std::optional<DBVersionedObject> get_versioned_object(
+      uint id, bool filter_deleted = true
+  ) const;
+  std::optional<DBVersionedObject> get_versioned_object(
+      const std::string& version_id, bool filter_deleted = true
+  ) const;
+  std::optional<DBVersionedObject> get_non_deleted_versioned_object(
+      const std::string& bucket_id, const std::string& object_name,
+      const std::string& version_id
+  ) const;
+  DBObjectsListItems list_last_versioned_objects(const std::string& bucket_id
+  ) const;
+
+  uint insert_versioned_object(const DBVersionedObject& object) const;
+  void store_versioned_object(const DBVersionedObject& object) const;
+  void remove_versioned_object(uint id) const;
+  void store_versioned_object_delete_rest_transact(
+      const DBVersionedObject& object
+  ) const;
+
+  std::vector<uint> get_versioned_object_ids(bool filter_deleted = true) const;
+  std::vector<uint> get_versioned_object_ids(
+      const uuid_d& object_id, bool filter_deleted = true
+  ) const;
+  std::vector<DBVersionedObject> get_versioned_objects(
+      const uuid_d& object_id, bool filter_deleted = true
+  ) const;
+
+  std::optional<DBVersionedObject> get_last_versioned_object(
+      const uuid_d& object_id, bool filter_deleted = true
+  ) const;
+
+  std::optional<DBVersionedObject> delete_version_and_get_previous_transact(
+      uint id
+  );
+
+  std::optional<DBVersionedObject> create_new_versioned_object_transact(
+      const std::string& bucket_id, const std::string& object_name,
       const std::string& version_id
   ) const;
 
-  uint insert_versioned_object(const DBOPVersionedObjectInfo& object) const;
-  void store_versioned_object(const DBOPVersionedObjectInfo& object) const;
-  void remove_versioned_object(uint id) const;
-
-  std::vector<uint> get_versioned_object_ids() const;
-  std::vector<uint> get_versioned_object_ids(const uuid_d& object_id) const;
-  std::vector<DBOPVersionedObjectInfo> get_versioned_objects(
-      const uuid_d& object_id
+  uint add_delete_marker_transact(
+      const uuid_d& object_id, const std::string& delete_marker_id, bool& added
   ) const;
 
-  std::optional<DBOPVersionedObjectInfo> get_last_versioned_object(
-      const uuid_d& object_id
+ private:
+  std::optional<DBVersionedObject>
+  get_non_deleted_versioned_object_specific_version(
+      const std::string& bucket_id, const std::string& object_name,
+      const std::string& version_id
+  ) const;
+
+  std::optional<DBVersionedObject>
+  get_non_deleted_versioned_object_last_version(
+      const std::string& bucket_id, const std::string& object_name
   ) const;
 };
 

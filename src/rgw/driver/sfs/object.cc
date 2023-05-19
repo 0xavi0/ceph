@@ -33,7 +33,8 @@ SFSObject::SFSReadOp::SFSReadOp(SFSObject* _source) : source(_source) {
     In those cases the SFSReadOp is not properly initialized and those
     calls are going to fail.
   */
-  source->refresh_meta();
+  // read op needs to retrieve also the version_id from the db
+  source->refresh_meta(true);
   objref = source->get_object_ref();
 }
 
@@ -54,7 +55,8 @@ int SFSObject::SFSReadOp::prepare(
 
   lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
                      << ", obj: " << source->get_name()
-                     << ", size: " << source->get_obj_size() << dendl;
+                     << ", size: " << source->get_obj_size()
+                     << ", versionId: " << source->get_instance() << dendl;
   if (params.lastmod) {
     *params.lastmod = source->get_mtime();
   }
@@ -150,7 +152,7 @@ int SFSObject::SFSDeleteOp::delete_obj(
     const DoutPrefixProvider* dpp, optional_yield y
 ) {
   lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
-                     << "bucket versioning: "
+                     << " bucket versioning: "
                      << source->bucket->versioning_enabled()
                      << ", object: " << source->get_name()
                      << ", instance: " << source->get_instance() << dendl;
@@ -162,12 +164,16 @@ int SFSObject::SFSDeleteOp::delete_obj(
   }
 
   auto version_id = source->get_instance();
+  std::string delete_marker_version_id;
   if (source->objref) {
-    bucketref->delete_object(source->objref, source->get_key());
-  } else if (source->bucket->versioning_enabled()) {
+    bucketref->delete_object(
+        source->objref, source->get_key(), source->bucket->versioning_enabled(),
+        delete_marker_version_id
+    );
+  } else if (source->bucket->versioning_enabled() && source->get_instance().empty()) {
     // create delete marker
     // even the object does not exist AWS creates a delete marker for it
-    // if versioning is enabled
+    // if versioning is enabled and a specific version was not specified
     version_id =
         bucketref->create_non_existing_object_delete_marker(source->get_key());
   }
@@ -176,6 +182,12 @@ int SFSObject::SFSDeleteOp::delete_obj(
   // and return the version id
   if (source->bucket->versioning_enabled()) {
     result.version_id = version_id;
+    if (!delete_marker_version_id.empty()) {
+      // a new delete marker was created.
+      // Return the version id generated for it.
+      result.version_id = delete_marker_version_id;
+    }
+    source->delete_marker = true;  // needed for multiobject delete
     result.delete_marker = true;
   }
   return 0;
@@ -220,7 +232,7 @@ int SFSObject::copy_object(
   std::filesystem::path srcpath =
       store->get_data_path() / objref->get_storage_path();
 
-  sfs::ObjectRef dstref = dst_bucket_ref->get_or_create(dst_object->get_key());
+  sfs::ObjectRef dstref = dst_bucket_ref->create_version(dst_object->get_key());
   std::filesystem::path dstpath =
       store->get_data_path() / dstref->get_storage_path();
 
@@ -247,7 +259,9 @@ int SFSObject::copy_object(
   dest_meta.mtime = ceph::real_clock::now();
   dstref->update_attrs(objref->get_attrs());
   dstref->update_meta(dest_meta);
-  dstref->metadata_finish(store);
+  dstref->metadata_finish(
+      store, dst_bucket_ref->get_info().versioning_enabled()
+  );
 
   return 0;
 }
@@ -438,42 +452,30 @@ std::unique_ptr<rgw::sal::Object::DeleteOp> SFSObject::get_delete_op() {
   return std::make_unique<SFSObject::SFSDeleteOp>(this, ref);
 }
 
-void SFSObject::refresh_meta() {
+void SFSObject::refresh_meta(bool update_version_id_from_metadata) {
   if (!bucketref) {
     bucketref = store->get_bucket_ref(bucket->get_name());
   }
   try {
-    objref = bucketref->get(get_name());
+    objref = bucketref->get(rgw_obj_key(get_name(), get_instance()));
   } catch (sfs::UnknownObjectException& e) {
     // object probably not created yet?
     return;
   }
-  _refresh_meta_from_object();
+  _refresh_meta_from_object(objref, update_version_id_from_metadata);
 }
 
-void SFSObject::_refresh_meta_from_object() {
+void SFSObject::_refresh_meta_from_object(
+    sfs::ObjectRef objref, bool update_version_id_from_metadata
+) {
   ceph_assert(objref);
-  if (!get_instance().empty() && get_instance() != objref->instance) {
-    // object specific version requested and it's not the last one
-    sfs::sqlite::SQLiteVersionedObjects db_versioned_objects(store->db_conn);
-    auto db_version = db_versioned_objects.get_versioned_object(get_instance());
-    if (db_version.has_value()) {
-      auto uuid = objref->path.get_uuid();
-      auto deleted = db_version->object_state == sfs::ObjectState::DELETED;
-      objref.reset(sfs::Object::create_for_query(
-          get_name(), uuid, deleted, db_version->id
-      ));
-      set_obj_size(db_version->size);
-      objref->update_attrs(db_version->attrs);
-      auto meta = objref->get_meta();
-      meta.etag = db_version->etag;
-      objref->update_meta(meta);
-    }
-  } else {
-    set_obj_size(objref->get_meta().size);
-  }
+  // fill values from objref
+  set_obj_size(objref->get_meta().size);
   set_attrs(objref->get_attrs());
   state.mtime = objref->get_meta().mtime;
+  if (update_version_id_from_metadata) {
+    set_instance(objref->instance);
+  }
 }
 
 }  // namespace rgw::sal

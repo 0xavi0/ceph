@@ -190,7 +190,7 @@ int SFSAtomicWriter::prepare(optional_yield y) {
   }
 
   try {
-    objref = bucketref->get_or_create(obj.get_key());
+    objref = bucketref->create_version(obj.get_key());
   } catch (const std::system_error& e) {
     lsfs_dout(dpp, -1)
         << fmt::format(
@@ -325,7 +325,7 @@ int SFSAtomicWriter::complete(
     *mtime = now;
   }
   try {
-    objref->metadata_finish(store);
+    objref->metadata_finish(store, bucketref->get_info().versioning_enabled());
   } catch (const std::system_error& e) {
     lsfs_dout(dpp, -1) << fmt::format(
                               "failed to update db object {}: {}. "

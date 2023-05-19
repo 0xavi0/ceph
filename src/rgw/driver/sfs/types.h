@@ -58,7 +58,7 @@ class Object {
   std::map<std::string, bufferlist> attrs;
 
  protected:
-  Object(const std::string& _name, const uuid_d& _uuid);
+  Object(const rgw_obj_key& _key, const uuid_d& _uuid);
 
   Object(const rgw_obj_key& key)
       : name(key.name),
@@ -66,29 +66,30 @@ class Object {
         path(UUIDPath::create()),
         deleted(false) {}
 
- public:
-  static Object* create_for_immediate_deletion(
-      const sqlite::DBOPObjectInfo& object
+  static Object* _get_object(
+      SFStore* store, const std::string& bucket_id, const rgw_obj_key& key
   );
+
+ public:
+  static Object* create_for_immediate_deletion(const sqlite::DBObject& object);
   static Object* create_for_query(
       const std::string& name, const uuid_d& uuid, bool deleted, uint version_id
   );
   static Object* create_for_testing(const std::string& name);
   static Object* create_from_obj_key(const rgw_obj_key& key);
+  static Object* create_from_db_version(
+      const std::string& object_name, const sqlite::DBVersionedObject& version
+  );
+  static Object* create_from_db_version(
+      const std::string& object_name, const sqlite::DBObjectsListItem& version
+  );
   static Object* create_for_multipart(const std::string& name);
 
   static Object* create_commit_delete_marker(
       const rgw_obj_key& key, SFStore* store, const std::string& bucket_id
   );
-  static Object* create_commit_new_object(
-      const rgw_obj_key& key, SFStore* store, const std::string& bucket_id,
-      const std::string* version_id
-  );
 
-  static Object* try_create_with_last_version_fetch_from_database(
-      SFStore* store, const std::string& name, const std::string& bucket_id
-  );
-  static Object* try_create_fetch_from_database(
+  static Object* try_fetch_from_database(
       SFStore* store, const std::string& name, const std::string& bucket_id,
       const std::string& version_id
   );
@@ -105,20 +106,11 @@ class Object {
 
   std::filesystem::path get_storage_path() const;
 
-  /// Update version and commit to database
-  void update_commit_new_version(SFStore* store, const std::string& version_id);
-
-  /// Change obj version state.
-  // Use this for example to update objs to in flight states like
-  // WRITING.
-  // Special case: DELETED sets this to deleted
-  // and commits a deletion time
-  void metadata_change_version_state(SFStore* store, ObjectState state);
-
   /// Commit all object state to database
   // Including meta and attrs
   // Sets obj version state to COMMITTED
-  void metadata_finish(SFStore* store);
+  // For unversioned buckets it set the other versions state to DELETED
+  void metadata_finish(SFStore* store, bool versioning_enabled);
 
   /// Commit attrs to database
   void metadata_flush_attrs(SFStore* store);
@@ -313,7 +305,23 @@ class Bucket {
   void _undelete_object(
       ObjectRef objref, const rgw_obj_key& key,
       sqlite::SQLiteVersionedObjects& sqlite_versioned_objects,
-      sqlite::DBOPVersionedObjectInfo& last_version
+      sqlite::DBVersionedObject& last_version
+  );
+
+  void _delete_object_non_versioned(
+      ObjectRef objref, const rgw_obj_key& key,
+      sqlite::SQLiteVersionedObjects& sqlite_versioned_objects
+  );
+
+  void _delete_object_version(
+      ObjectRef objref, const rgw_obj_key& key,
+      sqlite::SQLiteVersionedObjects& sqlite_versioned_objects,
+      sqlite::DBVersionedObject& version
+  );
+
+  std::string _add_delete_marker(
+      ObjectRef objref, const rgw_obj_key& key,
+      sqlite::SQLiteVersionedObjects& sqlite_versioned_objects
   );
 
  public:
@@ -354,17 +362,21 @@ class Bucket {
   uint32_t get_flags() const { return info.flags; }
 
  public:
-  /// Return object for key. Do everything necessary to retrieve or
-  // create this object including object version.
-  ObjectRef get_or_create(const rgw_obj_key& key);
+  /// Create object version for key
+  ObjectRef create_version(const rgw_obj_key& key);
 
-  /// Get existing object by name. Throws if it doesn't exist.
-  ObjectRef get(const std::string& name);
-  /// Get copy of all objects
+  /// Get existing object by key. Throws if it doesn't exist.
+  ObjectRef get(const rgw_obj_key& key);
+  /// Get copy of all objects that are committed and not deleted
   std::vector<ObjectRef> get_all();
 
   /// S3 delete object operation: delete version or create tombstone.
-  void delete_object(ObjectRef objref, const rgw_obj_key& key);
+  /// If a delete marker was added, it returns the new version id generated for
+  /// it
+  void delete_object(
+      ObjectRef objref, const rgw_obj_key& key, bool versioned_bucket,
+      std::string& delete_marker_version_id
+  );
 
   /// Delete a non-existing object. Creates object with toumbstone
   // version in database.
@@ -400,7 +412,7 @@ class Bucket {
     mp->finish();
     multiparts.erase(it);
 
-    objref->metadata_finish(store);
+    objref->metadata_finish(store, get_info().versioning_enabled());
   }
 
   std::string gen_multipart_upload_id() {

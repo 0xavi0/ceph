@@ -36,7 +36,9 @@ class SFSObject : public StoreObject {
  protected:
   SFSObject(SFSObject&) = default;
 
-  void _refresh_meta_from_object();
+  void _refresh_meta_from_object(
+      sfs::ObjectRef objref, bool update_version_id_from_metadata = false
+  );
 
  public:
   /**
@@ -109,7 +111,7 @@ class SFSObject : public StoreObject {
         store(_st),
         bucketref(_bucketref),
         objref(_objref) {
-    _refresh_meta_from_object();
+    _refresh_meta_from_object(objref);
   }
 
   virtual std::unique_ptr<Object> clone() override {
@@ -224,7 +226,13 @@ class SFSObject : public StoreObject {
 
   void set_object_ref(sfs::ObjectRef objref) { this->objref = objref; }
 
-  void refresh_meta();
+  // Refresh metadata from db.
+  // Also retrieves version_id when specified.
+  // There are situations (like delete operations) in which we don't want to
+  // update the version_id passed in the S3 call.
+  // Doing so could convert an "add delete marker" call to a "delete a specific
+  // version" call.
+  void refresh_meta(bool update_version_id_from_metadata = false);
 
   const std::string get_cls_name() { return "object"; }
 };

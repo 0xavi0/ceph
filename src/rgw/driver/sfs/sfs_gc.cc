@@ -102,7 +102,9 @@ void SFSGC::delete_objects(const std::string& bucket_id) {
 
 void SFSGC::delete_versioned_objects(const Object& object) {
   sqlite::SQLiteVersionedObjects db_ver_objs(store->db_conn);
-  auto versions = db_ver_objs.get_versioned_objects(object.path.get_uuid());
+  // get all versions. Including deleted ones
+  auto versions =
+      db_ver_objs.get_versioned_objects(object.path.get_uuid(), false);
   for (auto const& version : versions) {
     if (max_objects <= 0) {
       break;

@@ -16,13 +16,7 @@
 
 namespace rgw::sal::sfs {
 
-enum class ObjectState {
-  OPEN = 0,
-  COMMITTED,
-  LOCKED,
-  DELETED,
-  LAST_VALUE = DELETED
-};
+enum class ObjectState { OPEN = 0, COMMITTED, DELETED, LAST_VALUE = DELETED };
 
 }  // namespace rgw::sal::sfs
 

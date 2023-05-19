@@ -63,7 +63,7 @@ class TestSFSBucket : public ::testing::Test {
         rgw::sal::sfs::Object::create_for_testing(name)
     );
     SQLiteObjects db_objects(conn);
-    DBOPObjectInfo db_object;
+    DBObject db_object;
     db_object.uuid = object->path.get_uuid();
     db_object.name = name;
     db_object.bucket_id = bucket_id;
@@ -72,7 +72,8 @@ class TestSFSBucket : public ::testing::Test {
   }
 
   void createTestBucket(
-      const std::string& bucket_id, const std::string& user_id, DBConnRef conn
+      const std::string& bucket_id, const std::string& user_id, DBConnRef conn,
+      bool versioned = false
   ) {
     SQLiteBuckets db_buckets(conn);
     DBOPBucketInfo bucket;
@@ -80,6 +81,9 @@ class TestSFSBucket : public ::testing::Test {
     bucket.binfo.bucket.bucket_id = bucket_id;
     bucket.binfo.owner.id = user_id;
     bucket.deleted = false;
+    if (versioned) {
+      bucket.binfo.flags |= BUCKET_VERSIONED;
+    }
     db_buckets.store_bucket(bucket);
   }
 
@@ -89,7 +93,7 @@ class TestSFSBucket : public ::testing::Test {
   ) {
     object->version_id = version;
     SQLiteVersionedObjects db_versioned_objects(conn);
-    DBOPVersionedObjectInfo db_version;
+    DBVersionedObject db_version;
     db_version.id = version;
     db_version.object_id = object->path.get_uuid();
     db_version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
@@ -625,7 +629,7 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   createUser("test_user", store->db_conn);
 
   // create test bucket
-  createTestBucket("test_bucket", "test_user", store->db_conn);
+  createTestBucket("test_bucket", "test_user", store->db_conn, true);
 
   // create a few objects in test_bucket with a few versions
   uint version_id = 1;
@@ -1051,8 +1055,8 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   // create the test user
   createUser("test_user", store->db_conn);
 
-  // create test bucket
-  createTestBucket("test_bucket", "test_user", store->db_conn);
+  // create test bucket versioned
+  createTestBucket("test_bucket", "test_user", store->db_conn, true);
 
   // create the following objects:
   // directory/

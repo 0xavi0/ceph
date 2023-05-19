@@ -63,28 +63,58 @@ class TestSFSSQLiteObjects : public ::testing::Test {
   }
 };
 
-void compareObjects(const DBOPObjectInfo& origin, const DBOPObjectInfo& dest) {
+void compareObjects(const DBObject& origin, const DBObject& dest) {
   ASSERT_EQ(origin.uuid, dest.uuid);
   ASSERT_EQ(origin.bucket_id, dest.bucket_id);
   ASSERT_EQ(origin.name, dest.name);
 }
 
-DBOPObjectInfo createTestObject(
+DBObject createTestObject(
     const std::string& suffix, CephContext* context,
     const std::string& username = "usertest"
 ) {
-  DBOPObjectInfo object;
+  DBObject object;
   object.uuid.generate_random();
   object.bucket_id = "test_bucket";
   object.name = "test" + suffix;
   return object;
 }
 
-bool uuidInVector(const uuid_d& uuid, const std::vector<uuid_d>& uuids) {
-  for (auto const& list_uuid : uuids) {
-    if (list_uuid == uuid) return true;
+DBVersionedObject createTestVersionedObject(
+    uint id, const std::string& object_id, const std::string& suffix
+) {
+  DBVersionedObject test_versioned_object;
+  test_versioned_object.id = id;
+  uuid_d uuid;
+  uuid.parse(object_id.c_str());
+  test_versioned_object.object_id = uuid;
+  test_versioned_object.checksum = "test_checksum_" + suffix;
+  // test_versioned_object.size = rand();
+  test_versioned_object.size = 1999;
+  test_versioned_object.create_time = ceph::real_clock::now();
+  test_versioned_object.delete_time = ceph::real_clock::now();
+  test_versioned_object.commit_time = ceph::real_clock::now();
+  test_versioned_object.mtime = ceph::real_clock::now();
+  test_versioned_object.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  test_versioned_object.version_id = "test_version_id_" + suffix;
+  test_versioned_object.etag = "test_etag_" + suffix;
+  test_versioned_object.version_type = rgw::sal::sfs::VersionType::REGULAR;
+
+  //set attrs with default ACL
+  {
+    RGWAccessControlPolicy aclp;
+    rgw_user aclu("usertest");
+    aclp.get_acl().create_default(aclu, "usertest");
+    aclp.get_owner().set_name("usertest");
+    aclp.get_owner().set_id(aclu);
+    bufferlist acl_bl;
+    aclp.encode(acl_bl);
+    rgw::sal::Attrs attrs;
+    attrs[RGW_ATTR_ACL] = acl_bl;
+    test_versioned_object.attrs = attrs;
   }
-  return false;
+
+  return test_versioned_object;
 }
 
 TEST_F(TestSFSSQLiteObjects, CreateAndGet) {
@@ -108,73 +138,6 @@ TEST_F(TestSFSSQLiteObjects, CreateAndGet) {
   compareObjects(object, *ret_object);
 }
 
-TEST_F(TestSFSSQLiteObjects, ListObjectsIDs) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-
-  EXPECT_FALSE(fs::exists(getDBFullPath()));
-  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
-
-  // Create the bucket, we need it because BucketName is a foreign key of Bucket::BucketID
-  createBucket("usertest", "test_bucket", conn);
-
-  auto db_objects = std::make_shared<SQLiteObjects>(conn);
-
-  auto obj1 = createTestObject("1", ceph_context.get());
-  db_objects->store_object(obj1);
-  auto obj2 = createTestObject("2", ceph_context.get());
-  db_objects->store_object(obj2);
-  auto obj3 = createTestObject("3", ceph_context.get());
-  db_objects->store_object(obj3);
-
-  EXPECT_TRUE(fs::exists(getDBFullPath()));
-
-  auto object_ids = db_objects->get_object_ids();
-  EXPECT_EQ(object_ids.size(), 3);
-
-  EXPECT_TRUE(uuidInVector(obj1.uuid, object_ids));
-  EXPECT_TRUE(uuidInVector(obj2.uuid, object_ids));
-  EXPECT_TRUE(uuidInVector(obj3.uuid, object_ids));
-}
-
-TEST_F(TestSFSSQLiteObjects, ListBucketsIDsPerBucket) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-
-  EXPECT_FALSE(fs::exists(getDBFullPath()));
-  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
-
-  createBucket("usertest", "test_bucket_1", conn);
-  createBucket("usertest", "test_bucket_2", conn);
-  createBucket("usertest", "test_bucket_3", conn);
-
-  auto db_objects = std::make_shared<SQLiteObjects>(conn);
-
-  auto test_object_1 = createTestObject("1", ceph_context.get());
-  test_object_1.bucket_id = "test_bucket_1";
-  db_objects->store_object(test_object_1);
-
-  auto test_object_2 = createTestObject("2", ceph_context.get());
-  test_object_2.bucket_id = "test_bucket_2";
-  db_objects->store_object(test_object_2);
-
-  auto test_object_3 = createTestObject("3", ceph_context.get());
-  test_object_3.bucket_id = "test_bucket_3";
-  db_objects->store_object(test_object_3);
-
-  auto objects_ids = db_objects->get_object_ids("test_bucket_1");
-  ASSERT_EQ(objects_ids.size(), 1);
-  EXPECT_EQ(objects_ids[0], test_object_1.uuid);
-
-  objects_ids = db_objects->get_object_ids("test_bucket_2");
-  ASSERT_EQ(objects_ids.size(), 1);
-  EXPECT_EQ(objects_ids[0], test_object_2.uuid);
-
-  objects_ids = db_objects->get_object_ids("test_bucket_3");
-  ASSERT_EQ(objects_ids.size(), 1);
-  EXPECT_EQ(objects_ids[0], test_object_3.uuid);
-}
-
 TEST_F(TestSFSSQLiteObjects, remove_object) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
@@ -195,13 +158,6 @@ TEST_F(TestSFSSQLiteObjects, remove_object) {
   db_objects->store_object(obj3);
 
   db_objects->remove_object(obj2.uuid);
-  auto object_ids = db_objects->get_object_ids();
-  EXPECT_EQ(object_ids.size(), 2);
-
-  EXPECT_TRUE(uuidInVector(obj1.uuid, object_ids));
-  EXPECT_FALSE(uuidInVector(obj2.uuid, object_ids));
-  EXPECT_TRUE(uuidInVector(obj3.uuid, object_ids));
-
   auto ret_object = db_objects->get_object(obj2.uuid);
   ASSERT_FALSE(ret_object.has_value());
 }
@@ -227,12 +183,8 @@ TEST_F(TestSFSSQLiteObjects, remove_objectThatDoesNotExist) {
 
   uuid_d non_existing_uuid;
   db_objects->remove_object(non_existing_uuid);
-  auto object_ids = db_objects->get_object_ids();
-  EXPECT_EQ(object_ids.size(), 3);
-
-  EXPECT_TRUE(uuidInVector(obj1.uuid, object_ids));
-  EXPECT_TRUE(uuidInVector(obj2.uuid, object_ids));
-  EXPECT_TRUE(uuidInVector(obj3.uuid, object_ids));
+  auto objects = db_objects->get_objects("test_bucket");
+  EXPECT_EQ(objects.size(), 3);
 }
 
 TEST_F(TestSFSSQLiteObjects, CreateAndUpdate) {
@@ -300,7 +252,7 @@ TEST_F(TestSFSSQLiteObjects, CreateObjectForNonExistingBucket) {
   SQLiteObjects db_objects(conn);
   auto storage = conn->get_storage();
 
-  DBOPObjectInfo db_object;
+  DBObject db_object;
 
   uuid_d uuid_obj;
   uuid_obj.parse("254ddc1a-06a6-11ed-b939-0242ac120002");

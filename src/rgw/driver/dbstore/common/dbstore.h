@@ -44,7 +44,7 @@ struct DBOpBucketInfo {
   std::list<RGWBucketEnt> list_entries;
 };
 
-struct DBOpObjectInfo {
+struct DBObject {
   RGWAccessControlPolicy acls;
   RGWObjState state = {};
 
@@ -124,7 +124,7 @@ struct DBOpInfo {
   DBOpUserInfo user;
   std::string query_str;
   DBOpBucketInfo bucket;
-  DBOpObjectInfo obj;
+  DBObject obj;
   DBOpObjectDataInfo obj_data;
   DBOpLCHeadInfo lc_head;
   DBOpLCEntryInfo lc_entry;

@@ -134,7 +134,7 @@ int SFSMultipartUpload::complete(
 
   ceph_assert(target_obj);
   ceph_assert(target_obj->get_name() == mp->objref->name);
-  sfs::ObjectRef outobj = bucketref->get_or_create(target_obj->get_key());
+  sfs::ObjectRef outobj = bucketref->create_version(target_obj->get_key());
   std::filesystem::path outpath =
       store->get_data_path() / outobj->get_storage_path();
   // ensure directory structure exists

@@ -130,17 +130,13 @@ class LifecycleSmokeTests(unittest.TestCase):
             {
                 "ID": "rule1",
                 "Expiration": {"Days": 1},
-                "Filter": {
-                   "Prefix": "expire1/"
-                },
+                "Filter": {"Prefix": "expire1/"},
                 "Status": "Enabled",
             },
             {
                 "ID": "rule2",
                 "Expiration": {"Days": 5},
-                "Filter": {
-                   "Prefix": "expire3/"
-                },
+                "Filter": {"Prefix": "expire3/"},
                 "Status": "Enabled",
             },
         ]
@@ -200,9 +196,7 @@ class LifecycleSmokeTests(unittest.TestCase):
             {
                 "ID": "rule1",
                 "Expiration": {"Days": 1},
-                "Filter": {
-                   "Prefix": "expire1/"
-                },
+                "Filter": {"Prefix": "expire1/"},
                 "Status": "Enabled",
             }
         ]
@@ -212,7 +206,7 @@ class LifecycleSmokeTests(unittest.TestCase):
         )
 
         # give enough time to expire.
-        # 4 cycles because:
+        # 3 cycles because:
         #                   1st cycle won't be expired yet (not still 1 day)
         #                   2nd cycle rgw considers the bucket at processed
         #                       today and skips it
@@ -238,9 +232,7 @@ class LifecycleSmokeTests(unittest.TestCase):
             {
                 "ID": "rule1",
                 "Expiration": {"Days": 1},
-                "Filter": {
-                   "Prefix": "expire1/"
-                },
+                "Filter": {"Prefix": "expire1/"},
                 "Status": "Enabled",
             }
         ]

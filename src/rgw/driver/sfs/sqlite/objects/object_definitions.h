@@ -20,7 +20,7 @@
 
 namespace rgw::sal::sfs::sqlite {
 
-struct DBOPObjectInfo {
+struct DBObject {
   uuid_d uuid;
   std::string bucket_id;
   std::string name;

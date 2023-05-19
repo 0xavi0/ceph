@@ -462,6 +462,7 @@ class ObjectLockingTests(unittest.TestCase):
 
         self.assertTrue(response["ResponseMetadata"]["HTTPStatusCode"] == 204)
 
+
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         address_port = sys.argv.pop()

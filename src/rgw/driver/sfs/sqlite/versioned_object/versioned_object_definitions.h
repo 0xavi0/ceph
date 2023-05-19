@@ -16,6 +16,7 @@
 #include <string>
 
 #include "rgw/driver/sfs/object_state.h"
+#include "rgw/driver/sfs/sqlite/bindings/blob.h"
 #include "rgw/driver/sfs/sqlite/bindings/enum.h"
 #include "rgw/driver/sfs/sqlite/bindings/real_time.h"
 #include "rgw/driver/sfs/version_type.h"
@@ -24,25 +25,7 @@
 
 namespace rgw::sal::sfs::sqlite {
 
-using BLOB = std::vector<char>;
-
 struct DBVersionedObject {
-  uint id;
-  uuid_d object_id;
-  std::string checksum;
-  size_t size;
-  ceph::real_time create_time;
-  ceph::real_time delete_time;
-  ceph::real_time commit_time;
-  ceph::real_time mtime;
-  ObjectState object_state;
-  std::string version_id;
-  std::string etag;
-  std::optional<BLOB> attrs;
-  VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
-};
-
-struct DBOPVersionedObjectInfo {
   uint id;
   uuid_d object_id;
   std::string checksum;
@@ -57,5 +40,78 @@ struct DBOPVersionedObjectInfo {
   rgw::sal::Attrs attrs;
   VersionType version_type = rgw::sal::sfs::VersionType::REGULAR;
 };
+
+using DBObjectsListItem = std::tuple<
+    decltype(DBObject::uuid), decltype(DBObject::name),
+    decltype(DBVersionedObject::version_id),
+    std::unique_ptr<decltype(DBVersionedObject::commit_time)>,
+    std::unique_ptr<decltype(DBVersionedObject::id)>,
+    decltype(DBVersionedObject::size), decltype(DBVersionedObject::etag),
+    decltype(DBVersionedObject::mtime),
+    decltype(DBVersionedObject::delete_time),
+    decltype(DBVersionedObject::attrs),
+    decltype(DBVersionedObject::version_type),
+    decltype(DBVersionedObject::object_state)>;
+
+using DBObjectsListItems = std::vector<DBObjectsListItem>;
+
+/// DBObjectsListItem helpers
+inline decltype(DBObject::uuid) get_uuid(const DBObjectsListItem& item) {
+  return std::get<0>(item);
+}
+
+inline decltype(DBObject::name) get_name(const DBObjectsListItem& item) {
+  return std::get<1>(item);
+}
+
+inline decltype(DBVersionedObject::version_id) get_version_id(
+    const DBObjectsListItem& item
+) {
+  return std::get<2>(item);
+}
+
+inline decltype(DBVersionedObject::id) get_id(const DBObjectsListItem& item) {
+  return *(std::get<4>(item));
+}
+
+inline decltype(DBVersionedObject::size) get_size(const DBObjectsListItem& item
+) {
+  return std::get<5>(item);
+}
+
+inline decltype(DBVersionedObject::etag) get_etag(const DBObjectsListItem& item
+) {
+  return std::get<6>(item);
+}
+
+inline decltype(DBVersionedObject::mtime) get_mtime(
+    const DBObjectsListItem& item
+) {
+  return std::get<7>(item);
+}
+
+inline decltype(DBVersionedObject::delete_time) get_delete_time(
+    const DBObjectsListItem& item
+) {
+  return std::get<8>(item);
+}
+
+inline decltype(DBVersionedObject::attrs) get_attrs(
+    const DBObjectsListItem& item
+) {
+  return std::get<9>(item);
+}
+
+inline decltype(DBVersionedObject::version_type) get_version_type(
+    const DBObjectsListItem& item
+) {
+  return std::get<10>(item);
+}
+
+inline decltype(DBVersionedObject::object_state) get_object_state(
+    const DBObjectsListItem& item
+) {
+  return std::get<11>(item);
+}
 
 }  // namespace rgw::sal::sfs::sqlite

@@ -12,7 +12,6 @@
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
 #include "rgw/driver/sfs/sqlite/sqlite_users.h"
 #include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
-#include "rgw/driver/sfs/sqlite/versioned_object/versioned_object_conversions.h"
 #include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
@@ -22,6 +21,7 @@ const static std::string TEST_DIR = "rgw_sfs_tests";
 
 const static std::string TEST_USERNAME = "test_username";
 const static std::string TEST_BUCKET = "test_bucket";
+const static std::string TEST_BUCKET_2 = "test_bucket_2";
 const static std::string TEST_OBJECT_ID =
     "80943a6d-9f72-4001-bac0-a9a036be8c49";
 const static std::string TEST_OBJECT_ID_1 =
@@ -30,6 +30,8 @@ const static std::string TEST_OBJECT_ID_2 =
     "af06d9d3-307f-4c98-865b-cd3b087acc4f";
 const static std::string TEST_OBJECT_ID_3 =
     "bf06d9d3-307f-4c98-865b-cd3b087acc4f";
+const static std::string TEST_OBJECT_ID_4 =
+    "cf06d9d3-307f-4c98-865b-cd3b087acc4f";
 
 class TestSFSSQLiteVersionedObjects : public ::testing::Test {
  protected:
@@ -82,7 +84,7 @@ class TestSFSSQLiteVersionedObjects : public ::testing::Test {
     createBucket(username, bucketname, conn);
     SQLiteObjects objects(conn);
 
-    DBOPObjectInfo object;
+    DBObject object;
     object.uuid.parse(object_id.c_str());
     object.bucket_id = bucketname;
     object.name = "test_name";
@@ -90,16 +92,17 @@ class TestSFSSQLiteVersionedObjects : public ::testing::Test {
   }
 };
 
-DBOPVersionedObjectInfo createTestVersionedObject(
+DBVersionedObject createTestVersionedObject(
     uint id, const std::string& object_id, const std::string& suffix
 ) {
-  DBOPVersionedObjectInfo test_versioned_object;
+  DBVersionedObject test_versioned_object;
   test_versioned_object.id = id;
   uuid_d uuid;
   uuid.parse(object_id.c_str());
   test_versioned_object.object_id = uuid;
   test_versioned_object.checksum = "test_checksum_" + suffix;
-  test_versioned_object.size = rand();
+  // test_versioned_object.size = rand();
+  test_versioned_object.size = 1999;
   test_versioned_object.create_time = ceph::real_clock::now();
   test_versioned_object.delete_time = ceph::real_clock::now();
   test_versioned_object.commit_time = ceph::real_clock::now();
@@ -148,7 +151,7 @@ void compareVersionedObjectsAttrs(
 }
 
 void compareVersionedObjects(
-    const DBOPVersionedObjectInfo& origin, const DBOPVersionedObjectInfo& dest
+    const DBVersionedObject& origin, const DBVersionedObject& dest
 ) {
   ASSERT_EQ(origin.id, dest.id);
   ASSERT_EQ(origin.object_id, dest.object_id);
@@ -228,9 +231,9 @@ TEST_F(TestSFSSQLiteVersionedObjects, ListObjectsIDs) {
   uuid.parse(TEST_OBJECT_ID.c_str());
   auto objects = db_versioned_objects->get_versioned_objects(uuid);
   ASSERT_EQ(objects.size(), 3);
-  compareVersionedObjects(objects[0], obj1);
+  compareVersionedObjects(objects[0], obj3);
   compareVersionedObjects(objects[1], obj2);
-  compareVersionedObjects(objects[2], obj3);
+  compareVersionedObjects(objects[2], obj1);
 }
 
 TEST_F(TestSFSSQLiteVersionedObjects, ListBucketsIDsPerObject) {
@@ -468,46 +471,6 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateObjectForNonExistingBucket) {
   );
 }
 
-TEST_F(TestSFSSQLiteVersionedObjects, Testobject_stateConversion) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-
-  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
-
-  // Create the object, we need it because of foreign key constrains
-  createObject(
-      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
-  );
-
-  SQLiteVersionedObjects db_objects(conn);
-  auto storage = conn->get_storage();
-
-  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
-  auto db_object = get_db_versioned_object(object);
-  ASSERT_EQ(rgw::sal::sfs::ObjectState::OPEN, db_object.object_state);
-
-  db_object.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
-  storage.replace(db_object);
-
-  auto ret_object = db_objects.get_versioned_object(db_object.id);
-  ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::sfs::ObjectState::COMMITTED, ret_object->object_state);
-
-  db_object.object_state = rgw::sal::sfs::ObjectState::LOCKED;
-  storage.replace(db_object);
-
-  ret_object = db_objects.get_versioned_object(db_object.id);
-  ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::sfs::ObjectState::LOCKED, ret_object->object_state);
-
-  db_object.object_state = rgw::sal::sfs::ObjectState::DELETED;
-  storage.replace(db_object);
-
-  ret_object = db_objects.get_versioned_object(db_object.id);
-  ASSERT_TRUE(ret_object.has_value());
-  ASSERT_EQ(rgw::sal::sfs::ObjectState::DELETED, ret_object->object_state);
-}
-
 TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
@@ -594,12 +557,75 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
   // just update the size, and add a new version
   object.size = 1999;
   object.version_id = "test_version_id_2";
+  object.commit_time = ceph::real_clock::now();
   db_versioned_objects->insert_versioned_object(object);
 
   // now it should return the last one
   ret_object = db_versioned_objects->get_last_versioned_object(uuid);
   ASSERT_TRUE(ret_object.has_value());
   object.id = 2;
+  compareVersionedObjects(object, *ret_object);
+
+  uuid_d uuid_that_does_not_exist;
+  uuid_that_does_not_exist.parse(TEST_OBJECT_ID_2.c_str());
+
+  ret_object =
+      db_versioned_objects->get_last_versioned_object(uuid_that_does_not_exist);
+  ASSERT_FALSE(ret_object.has_value());
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersionRepeatedCommitTime) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // Create the object, we need it because of foreign key constrains
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  // keep it for later
+  auto commit_time = object.commit_time;
+  db_versioned_objects->insert_versioned_object(object);
+  EXPECT_TRUE(fs::exists(getDBFullPath()));
+
+  uuid_d uuid;
+  uuid.parse(TEST_OBJECT_ID.c_str());
+  auto ret_object = db_versioned_objects->get_last_versioned_object(uuid);
+  ASSERT_TRUE(ret_object.has_value());
+  compareVersionedObjects(object, *ret_object);
+
+  // just update the size, and add a new version
+  object.size = 1999;
+  object.version_id = "test_version_id_2";
+  // set the same commit time
+  object.commit_time = commit_time;
+  db_versioned_objects->insert_versioned_object(object);
+
+  // now we have 2 entries with the same commit time.
+  // it should return the one with the highest id
+  ret_object = db_versioned_objects->get_last_versioned_object(uuid);
+  ASSERT_TRUE(ret_object.has_value());
+  object.id = 2;
+  compareVersionedObjects(object, *ret_object);
+
+  // just update the size, and add a new version
+  object.size = 3121;
+  object.version_id = "test_version_id_3";
+  // set the same commit time
+  object.commit_time = commit_time;
+  db_versioned_objects->insert_versioned_object(object);
+
+  // now we have 3 entries with the same commit time.
+  // it should return the one with the highest id (3)
+  ret_object = db_versioned_objects->get_last_versioned_object(uuid);
+  ASSERT_TRUE(ret_object.has_value());
+  object.id = 3;
   compareVersionedObjects(object, *ret_object);
 
   uuid_d uuid_that_does_not_exist;
@@ -728,8 +754,10 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
           ;
         } catch (const std::system_error& e) {
           EXPECT_STREQ(
-              "Error converting ceph::real_time to int64. Nanoseconds value: "
-              "9223372036854775808 is out of range: Numerical result out of "
+              "Error converting ceph::real_time to int64. Nanoseconds "
+              "value: "
+              "9223372036854775808 is out of range: Numerical result out "
+              "of "
               "range",
               e.what()
           );
@@ -738,4 +766,581 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
       },
       std::system_error
   );
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestFilterDeleted) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // Create the object, we need it because of foreign key constrains
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // create 5 versions
+  // versions 2 and 3 are deleted
+  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_2";
+  object.object_state = rgw::sal::sfs::ObjectState::DELETED;
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_3";
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
+  object.object_state = rgw::sal::sfs::ObjectState::OPEN;
+  object.version_id = "test_version_id_4";
+  EXPECT_EQ(4, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_5";
+  EXPECT_EQ(5, db_versioned_objects->insert_versioned_object(object));
+
+  // get_versioned_object(uint id)
+  // try to get version 1 (not deleted)
+  auto not_deleted = db_versioned_objects->get_versioned_object(1);
+  ASSERT_TRUE(not_deleted.has_value());
+  ASSERT_NE(rgw::sal::sfs::ObjectState::DELETED, not_deleted->object_state);
+
+  // now version 2 (deleted)
+  auto deleted = db_versioned_objects->get_versioned_object(2);
+  ASSERT_FALSE(deleted.has_value());
+  // now version 2, not filtering deleted
+  deleted = db_versioned_objects->get_versioned_object(2, false);
+  ASSERT_TRUE(deleted.has_value());
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::DELETED, deleted->object_state);
+
+  // get_versioned_object(const std::string & version_id)
+  // try to get version 1 (not deleted)
+  not_deleted = db_versioned_objects->get_versioned_object("test_version_id_1");
+  ASSERT_TRUE(not_deleted.has_value());
+  ASSERT_NE(rgw::sal::sfs::ObjectState::DELETED, not_deleted->object_state);
+
+  // now version 2 (deleted)
+  deleted = db_versioned_objects->get_versioned_object("test_version_id_2");
+  ASSERT_FALSE(deleted.has_value());
+  // now version 2, not filtering deleted
+  deleted =
+      db_versioned_objects->get_versioned_object("test_version_id_2", false);
+  ASSERT_TRUE(deleted.has_value());
+  ASSERT_EQ(rgw::sal::sfs::ObjectState::DELETED, deleted->object_state);
+
+  // get_versioned_object_ids
+  auto ids = db_versioned_objects->get_versioned_object_ids();
+  ASSERT_EQ(3, ids.size());  // 2 and 3 will not be returned
+  for (const auto& id : ids) {
+    ASSERT_NE(2, id);
+    ASSERT_NE(3, id);
+  }
+
+  ids = db_versioned_objects->get_versioned_object_ids(false);
+  ASSERT_EQ(5, ids.size());  // 2 and 3 will be returned
+
+  // get_versioned_object_ids(const uuid_d & object_id)
+  uuid_d object_id;
+  object_id.parse(TEST_OBJECT_ID.c_str());
+  ids = db_versioned_objects->get_versioned_object_ids(object_id);
+  ASSERT_EQ(3, ids.size());  // 2 and 3 will not be returned
+  for (const auto& id : ids) {
+    ASSERT_NE(2, id);
+    ASSERT_NE(3, id);
+  }
+
+  ids = db_versioned_objects->get_versioned_object_ids(object_id, false);
+  ASSERT_EQ(5, ids.size());  // 2 and 3 will be returned
+
+  // get_versioned_objects(const uuid_d & object_id)
+  auto versions = db_versioned_objects->get_versioned_objects(object_id);
+  ASSERT_EQ(3, versions.size());  // 2 and 3 will not be returned
+  for (const auto& version : versions) {
+    ASSERT_NE(2, version.id);
+    ASSERT_NE(3, version.id);
+    ASSERT_NE(rgw::sal::sfs::ObjectState::DELETED, version.object_state);
+  }
+  versions = db_versioned_objects->get_versioned_objects(object_id, false);
+  ASSERT_EQ(5, versions.size());  // 2 and 3 will be returned
+
+  // get_last_versioned_object
+  // this time last version (5) is not deleted
+  // get it first, then flag as deleted and check
+  auto last_version =
+      db_versioned_objects->get_last_versioned_object(object_id);
+  ASSERT_TRUE(last_version.has_value());
+  ASSERT_EQ(5, last_version->id);
+
+  // now flag the last version as DELETED
+  last_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*last_version);
+
+  // we update, so no new version should be created
+  versions = db_versioned_objects->get_versioned_objects(object_id, false);
+  ASSERT_EQ(5, versions.size());  // will still return 5 versions
+
+  versions = db_versioned_objects->get_versioned_objects(object_id);
+  ASSERT_EQ(2, versions.size());  // now only 2 are not deleted
+
+  // now last version should be 4
+  last_version = db_versioned_objects->get_last_versioned_object(object_id);
+  ASSERT_TRUE(last_version.has_value());
+  ASSERT_EQ(4, last_version->id);
+
+  // if we don't filter deleted it's still 5
+  last_version =
+      db_versioned_objects->get_last_versioned_object(object_id, false);
+  ASSERT_TRUE(last_version.has_value());
+  ASSERT_EQ(5, last_version->id);
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestDeleteLastAndGetPrevious) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // Create the object, we need it because of foreign key constrains
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // create 3 versions (last one is a delete marker)
+  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  object.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_2";
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_3";
+  object.version_type = rgw::sal::sfs::VersionType::DELETE_MARKER;
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
+
+  auto last_version_now =
+      db_versioned_objects->delete_version_and_get_previous_transact(3);
+  ASSERT_TRUE(last_version_now.has_value());
+  ASSERT_EQ(2, last_version_now->id);
+  ASSERT_EQ("test_version_id_2", last_version_now->version_id);
+
+  uuid_d object_id;
+  object_id.parse(TEST_OBJECT_ID.c_str());
+  last_version_now = db_versioned_objects->get_last_versioned_object(object_id);
+  ASSERT_TRUE(last_version_now.has_value());
+  ASSERT_EQ(2, last_version_now->id);
+  ASSERT_EQ("test_version_id_2", last_version_now->version_id);
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // SCENARIO 1. ONLY 1 object with committed versions
+  // Create the object, we need it because of foreign key constrains
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // insert 3 committed versions
+  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  object.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_2";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_3";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
+
+  // try to get version (TEST_BUCKET, "test_name", "test_version_id_2")
+  // corresponding to the second version
+  auto version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "test_version_id_2"
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_2", version->version_id);
+  EXPECT_EQ(2, version->id);
+
+  // don't pass any version. Should return the last one
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", ""
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_3", version->version_id);
+  EXPECT_EQ(3, version->id);
+
+  // pass a non existing version_id
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "this_version_does_not_exist"
+  );
+  ASSERT_FALSE(version.has_value());
+
+  // SCENARIO 2. There is one object with all versions deleted (waiting to be
+  // removed by the garbage collector) and the alive object, both with the same
+  // object name but different uuid
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+  );
+  object = createTestVersionedObject(4, TEST_OBJECT_ID_2, "4");
+  object.object_state = rgw::sal::sfs::ObjectState::DELETED;
+  EXPECT_EQ(4, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_5";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(5, db_versioned_objects->insert_versioned_object(object));
+
+  // even though commit times for this versions are later in time than for the
+  // first object it should still return versions from the first object
+
+  // don't pass any version. Should return the last one
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", ""
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_3", version->version_id);
+  EXPECT_EQ(3, version->id);
+
+  // try to get a deleted version (TEST_BUCKET, "test_name", "test_version_id_5")
+  // corresponding to the second version
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "test_version_id_5"
+  );
+  // should not return that object
+  // (it is deleted waiting for the garbage collector)
+  ASSERT_FALSE(version.has_value());
+
+  // still return valid version
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "test_version_id_3"
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_3", version->version_id);
+  EXPECT_EQ(3, version->id);
+
+  // SCENARIO 3. 2 Objects with the same name in different buckets.
+  // in this case the object in bucket TEST_BUCKET_2 is in open state
+  // (still writing to it), but that's still an alive object
+  createObject(
+      TEST_USERNAME, TEST_BUCKET_2, TEST_OBJECT_ID_3, ceph_context.get(), conn
+  );
+  object = createTestVersionedObject(6, TEST_OBJECT_ID_3, "6");
+  EXPECT_EQ(6, db_versioned_objects->insert_versioned_object(object));
+
+  // still return valid version for 1st object
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "test_version_id_3"
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_3", version->version_id);
+  EXPECT_EQ(3, version->id);
+
+  // and also valid for the object in the second bucket
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET_2, "test_name", "test_version_id_6"
+  );
+  ASSERT_TRUE(version.has_value());
+  EXPECT_EQ("test_version_id_6", version->version_id);
+  EXPECT_EQ(6, version->id);
+
+  // but version 6 is not on first bucket
+  version = db_versioned_objects->get_non_deleted_versioned_object(
+      TEST_BUCKET, "test_name", "test_version_id_6"
+  );
+  ASSERT_FALSE(version.has_value());
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateAndDeleteRest) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // insert 3 open versions
+  auto object = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  object.object_state = rgw::sal::sfs::ObjectState::OPEN;
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_2";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_3";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
+
+  // create a different object
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+  );
+  // with also 3 open versions
+  object = createTestVersionedObject(4, TEST_OBJECT_ID_2, "4");
+  object.object_state = rgw::sal::sfs::ObjectState::OPEN;
+  EXPECT_EQ(4, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_5";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(5, db_versioned_objects->insert_versioned_object(object));
+  object.version_id = "test_version_id_6";
+  object.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(6, db_versioned_objects->insert_versioned_object(object));
+
+  // update object 2 to COMMITTED and DELETE the rest in a transaction
+  auto object_2 = db_versioned_objects->get_versioned_object(2, false);
+  ASSERT_TRUE(object_2.has_value());
+  object_2->object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  db_versioned_objects->store_versioned_object_delete_rest_transact(*object_2);
+
+  // all the rest should be updated (but only for that object)
+  auto object_ret = db_versioned_objects->get_versioned_object(1, false);
+  ASSERT_TRUE(object_ret.has_value());
+  EXPECT_EQ(rgw::sal::sfs::ObjectState::DELETED, object_ret->object_state);
+  object_ret = db_versioned_objects->get_versioned_object(3, false);
+  ASSERT_TRUE(object_ret.has_value());
+  EXPECT_EQ(rgw::sal::sfs::ObjectState::DELETED, object_ret->object_state);
+
+  // the other object versions should be still open
+  uuid_d uuid_second_object;
+  uuid_second_object.parse(TEST_OBJECT_ID_2.c_str());
+  // get the objects but not filtering deleted ones (we get all)
+  auto versions =
+      db_versioned_objects->get_versioned_objects(uuid_second_object, false);
+  EXPECT_EQ(3, versions.size());
+  for (const auto& ver : versions) {
+    EXPECT_EQ(rgw::sal::sfs::ObjectState::OPEN, ver.object_state);
+  }
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateDeleteVersionDeletesObject) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // insert 3 committed versions
+  auto version = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  version.object_state = rgw::sal::sfs::ObjectState::DELETED;
+  version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_2";
+  version.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(version));
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_id = "test_version_id_3";
+  version.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(version));
+
+  // insert 3 committed versions
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+  );
+  version = createTestVersionedObject(4, TEST_OBJECT_ID_2, "4");
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+  EXPECT_EQ(4, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_5";
+  EXPECT_EQ(5, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_6";
+  EXPECT_EQ(6, db_versioned_objects->insert_versioned_object(version));
+
+  // insert 3 committed versions for another object
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_3, ceph_context.get(), conn
+  );
+  version = createTestVersionedObject(7, TEST_OBJECT_ID_3, "7");
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+  EXPECT_EQ(7, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_8";
+  EXPECT_EQ(8, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_9";
+  EXPECT_EQ(9, db_versioned_objects->insert_versioned_object(version));
+
+  // insert 3 committed versions for another object in another bucket
+  createObject(
+      TEST_USERNAME, TEST_BUCKET_2, TEST_OBJECT_ID_4, ceph_context.get(), conn
+  );
+  version = createTestVersionedObject(10, TEST_OBJECT_ID_4, "10");
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+  EXPECT_EQ(10, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_11";
+  EXPECT_EQ(11, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_12";
+  EXPECT_EQ(12, db_versioned_objects->insert_versioned_object(version));
+
+  // we have 3 objects with 3 versions in TEST_BUCKET
+  // one of the objects has 2 version deleted. The rest have all versions alive.
+
+  // we also have object with 3 version in TEST_BUCKET_2
+  auto object_list =
+      db_versioned_objects->list_last_versioned_objects(TEST_BUCKET);
+  ASSERT_EQ(3, object_list.size());
+  // first item
+  uuid_d uuid_object;
+  uuid_object.parse(TEST_OBJECT_ID.c_str());
+  EXPECT_EQ(uuid_object, rgw::sal::sfs::sqlite::get_uuid(object_list[0]));
+  // versions 1 and 2 for TEST_OBJECT_ID are deleted
+  EXPECT_EQ(
+      "test_version_id_3", rgw::sal::sfs::sqlite::get_version_id(object_list[0])
+  );
+  EXPECT_EQ(3, rgw::sal::sfs::sqlite::get_id(object_list[0]));
+
+  // second item
+  uuid_object.parse(TEST_OBJECT_ID_2.c_str());
+  EXPECT_EQ(uuid_object, rgw::sal::sfs::sqlite::get_uuid(object_list[1]));
+  EXPECT_EQ(
+      "test_version_id_6", rgw::sal::sfs::sqlite::get_version_id(object_list[1])
+  );
+  EXPECT_EQ(6, rgw::sal::sfs::sqlite::get_id(object_list[1]));
+
+  // third item
+  uuid_object.parse(TEST_OBJECT_ID_3.c_str());
+  EXPECT_EQ(uuid_object, rgw::sal::sfs::sqlite::get_uuid(object_list[2]));
+  EXPECT_EQ(
+      "test_version_id_9", rgw::sal::sfs::sqlite::get_version_id(object_list[2])
+  );
+  EXPECT_EQ(9, rgw::sal::sfs::sqlite::get_id(object_list[2]));
+
+  // now delete the 3rd version of TEST_OBJECT_ID
+  auto version_to_delete = db_versioned_objects->get_versioned_object(3);
+  version_to_delete->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version_to_delete);
+
+  // list again
+  object_list = db_versioned_objects->list_last_versioned_objects(TEST_BUCKET);
+  // the object with all version deleted should not be listed
+  ASSERT_EQ(2, object_list.size());
+
+  // second item
+  uuid_object.parse(TEST_OBJECT_ID_2.c_str());
+  EXPECT_EQ(uuid_object, rgw::sal::sfs::sqlite::get_uuid(object_list[0]));
+  EXPECT_EQ(
+      "test_version_id_6", rgw::sal::sfs::sqlite::get_version_id(object_list[0])
+  );
+  EXPECT_EQ(6, rgw::sal::sfs::sqlite::get_id(object_list[0]));
+
+  // third item
+  uuid_object.parse(TEST_OBJECT_ID_3.c_str());
+  EXPECT_EQ(uuid_object, rgw::sal::sfs::sqlite::get_uuid(object_list[1]));
+  EXPECT_EQ(
+      "test_version_id_9", rgw::sal::sfs::sqlite::get_version_id(object_list[1])
+  );
+  EXPECT_EQ(9, rgw::sal::sfs::sqlite::get_id(object_list[1]));
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestAddDeleteMarker) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+
+  // insert 3 committed versions
+  auto version = createTestVersionedObject(1, TEST_OBJECT_ID, "1");
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+  EXPECT_EQ(1, db_versioned_objects->insert_versioned_object(version));
+  version.version_id = "test_version_id_2";
+  version.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(2, db_versioned_objects->insert_versioned_object(version));
+  version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  version.version_id = "test_version_id_3";
+  version.commit_time = ceph::real_clock::now();
+  EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(version));
+
+  // add a delete marker
+  auto delete_marker_id = "delete_marker_id";
+  uuid_d uuid;
+  uuid.parse(TEST_OBJECT_ID.c_str());
+  bool added;
+  auto id = db_versioned_objects->add_delete_marker_transact(
+      uuid, delete_marker_id, added
+  );
+  EXPECT_TRUE(added);
+  EXPECT_EQ(4, id);
+  auto delete_marker = db_versioned_objects->get_versioned_object(4);
+  ASSERT_TRUE(delete_marker.has_value());
+  EXPECT_EQ(
+      rgw::sal::sfs::VersionType::DELETE_MARKER, delete_marker->version_type
+  );
+  EXPECT_EQ(rgw::sal::sfs::ObjectState::COMMITTED, delete_marker->object_state);
+  EXPECT_EQ(version.etag, delete_marker->etag);
+  EXPECT_EQ("delete_marker_id", delete_marker->version_id);
+
+  // add another delete marker (should not add it because the marker already
+  // exists)
+  id = db_versioned_objects->add_delete_marker_transact(
+      uuid, delete_marker_id, added
+  );
+  EXPECT_FALSE(added);
+  EXPECT_EQ(0, id);
+  auto last_version = db_versioned_objects->get_versioned_object(5);
+  ASSERT_FALSE(last_version.has_value());
+
+  // delete the delete marker
+  db_versioned_objects->remove_versioned_object(4);
+
+  // now lets say version 2 and 3 are expired and deleted by LC
+  // (for whatever reason)
+  auto read_version = db_versioned_objects->get_versioned_object(2);
+  ASSERT_TRUE(read_version.has_value());
+  read_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*read_version);
+
+  read_version = db_versioned_objects->get_versioned_object(3);
+  ASSERT_TRUE(read_version.has_value());
+  read_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*read_version);
+
+  // try to create the delete marker (we still have 1 alive version)
+  id = db_versioned_objects->add_delete_marker_transact(
+      uuid, delete_marker_id, added
+  );
+  EXPECT_TRUE(added);
+  EXPECT_EQ(5, id);
+  delete_marker = db_versioned_objects->get_versioned_object(5);
+  ASSERT_TRUE(delete_marker.has_value());
+  EXPECT_EQ(
+      rgw::sal::sfs::VersionType::DELETE_MARKER, delete_marker->version_type
+  );
+  EXPECT_EQ(rgw::sal::sfs::ObjectState::COMMITTED, delete_marker->object_state);
+  EXPECT_EQ(version.etag, delete_marker->etag);
+  EXPECT_EQ("delete_marker_id", delete_marker->version_id);
+
+  // delete the marker
+  db_versioned_objects->remove_versioned_object(5);
+
+  // mark the alive version as deleted
+  read_version = db_versioned_objects->get_versioned_object(1);
+  ASSERT_TRUE(read_version.has_value());
+  read_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*read_version);
+
+  // add another delete marker (should not add it because all the versions of
+  // the object are deleted)
+  id = db_versioned_objects->add_delete_marker_transact(
+      uuid, delete_marker_id, added
+  );
+  EXPECT_FALSE(added);
+  EXPECT_EQ(0, id);
 }
