@@ -86,7 +86,7 @@ test_bucket_listv2_objects_anonymous_fail
 test_bucket_notexist
 test_bucketv2_notexist
 test_bucket_delete_notexist
-# test_bucket_delete_nonempty
+test_bucket_delete_nonempty
 test_bucket_concurrent_set_canned_acl
 test_object_write_to_nonexist_bucket
 test_bucket_create_delete

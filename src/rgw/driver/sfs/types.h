@@ -91,7 +91,7 @@ class Object {
 
   static Object* try_fetch_from_database(
       SFStore* store, const std::string& name, const std::string& bucket_id,
-      const std::string& version_id
+      const std::string& version_id, bool versioning_enabled
   );
 
   const Meta get_meta() const;

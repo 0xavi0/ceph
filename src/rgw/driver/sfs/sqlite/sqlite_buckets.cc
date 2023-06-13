@@ -97,4 +97,19 @@ std::vector<std::string> SQLiteBuckets::get_deleted_buckets_ids() const {
   );
 }
 
+bool SQLiteBuckets::bucket_empty(const std::string& bucket_id) const {
+  auto storage = conn->get_storage();
+  auto num_ids = storage.count<DBVersionedObject>(
+      inner_join<DBObject>(
+          on(is_equal(&DBObject::uuid, &DBVersionedObject::object_id))
+      ),
+      where(
+          is_equal(&DBVersionedObject::object_state, ObjectState::COMMITTED) and
+          is_equal(&DBObject::bucket_id, bucket_id) and
+          is_equal(&DBVersionedObject::version_type, VersionType::REGULAR)
+      )
+  );
+  return num_ids == 0;
+}
+
 }  // namespace rgw::sal::sfs::sqlite

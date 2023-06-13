@@ -122,12 +122,17 @@ Object* Object::create_commit_delete_marker(
 
 Object* Object::try_fetch_from_database(
     SFStore* store, const std::string& name, const std::string& bucket_id,
-    const std::string& version_id
+    const std::string& version_id, bool versioning_enabled
 ) {
+  auto version_id_query = version_id;
+  if (!versioning_enabled && version_id == "null") {
+    // non versioned bucket and versionId = null --> ignore versionId
+    version_id_query = "";
+  }
   sqlite::SQLiteVersionedObjects objs_versions(store->db_conn);
   // if version_id is empty it will get the last version for that object
   auto version = objs_versions.get_non_deleted_versioned_object(
-      bucket_id, name, version_id
+      bucket_id, name, version_id_query
   );
   if (!version.has_value()) {
     return nullptr;
@@ -319,7 +324,8 @@ ObjectRef Bucket::create_version(const rgw_obj_key& key) {
 
 ObjectRef Bucket::get(const rgw_obj_key& key) {
   auto maybe_result = Object::try_fetch_from_database(
-      store, key.name, info.bucket.bucket_id, key.instance
+      store, key.name, info.bucket.bucket_id, key.instance,
+      get_info().versioning_enabled()
   );
 
   if (maybe_result == nullptr) {

@@ -1,18 +1,18 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-
-#include "rgw/rgw_sal_sfs.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
 #include <random>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -27,33 +27,29 @@ const static std::string TEST_DIR = "rgw_sfs_tests";
   public editable members.
 */
 namespace mockable {
-  struct DefaultRetention
-  {
-    std::string mode;
-    int days;
-    int years;
-  };
+struct DefaultRetention {
+  std::string mode;
+  int days;
+  int years;
+};
 
-  struct ObjectLockRule
-  {
-    mockable::DefaultRetention defaultRetention;
-  };
+struct ObjectLockRule {
+  mockable::DefaultRetention defaultRetention;
+};
 
-  struct RGWObjectLock
-  {
-    bool enabled;
-    bool rule_exist;
-    mockable::ObjectLockRule rule;
-  };
+struct RGWObjectLock {
+  bool enabled;
+  bool rule_exist;
+  mockable::ObjectLockRule rule;
+};
 
-  mockable::RGWObjectLock& actual2mock(::RGWObjectLock& actual)
-  {
-    return (mockable::RGWObjectLock&)actual;
-  }
+mockable::RGWObjectLock& actual2mock(::RGWObjectLock& actual) {
+  return (mockable::RGWObjectLock&)actual;
 }
+}  // namespace mockable
 
 class TestSFSSQLiteBuckets : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -69,17 +65,15 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
-  void createUser(const std::string & username, DBConnRef conn) {
+  void createUser(const std::string& username, DBConnRef conn) {
     SQLiteUsers users(conn);
     DBOPUserInfo user;
     user.uinfo.user_id.id = username;
@@ -87,7 +81,9 @@ protected:
   }
 };
 
-void compareBucketRGWInfo(const RGWBucketInfo & origin, const RGWBucketInfo & dest) {
+void compareBucketRGWInfo(
+    const RGWBucketInfo& origin, const RGWBucketInfo& dest
+) {
   ASSERT_EQ(origin.bucket.name, dest.bucket.name);
   ASSERT_EQ(origin.bucket.tenant, dest.bucket.tenant);
   ASSERT_EQ(origin.bucket.marker, dest.bucket.marker);
@@ -95,7 +91,9 @@ void compareBucketRGWInfo(const RGWBucketInfo & origin, const RGWBucketInfo & de
   ASSERT_EQ(origin.owner.id, dest.owner.id);
   ASSERT_EQ(origin.creation_time, dest.creation_time);
   ASSERT_EQ(origin.placement_rule.name, dest.placement_rule.name);
-  ASSERT_EQ(origin.placement_rule.storage_class, dest.placement_rule.storage_class);
+  ASSERT_EQ(
+      origin.placement_rule.storage_class, dest.placement_rule.storage_class
+  );
   ASSERT_EQ(origin.owner.id, dest.owner.id);
   ASSERT_EQ(origin.flags, dest.flags);
   ASSERT_EQ(origin.zonegroup, dest.zonegroup);
@@ -107,10 +105,16 @@ void compareBucketRGWInfo(const RGWBucketInfo & origin, const RGWBucketInfo & de
   ASSERT_EQ(origin.obj_lock.get_years(), dest.obj_lock.get_years());
   ASSERT_EQ(origin.obj_lock.get_mode(), dest.obj_lock.get_mode());
   ASSERT_EQ(origin.obj_lock.has_rule(), dest.obj_lock.has_rule());
-  ASSERT_EQ(origin.obj_lock.retention_period_valid(), dest.obj_lock.retention_period_valid());
+  ASSERT_EQ(
+      origin.obj_lock.retention_period_valid(),
+      dest.obj_lock.retention_period_valid()
+  );
 }
 
-void compareBucketAttrs(const std::optional<rgw::sal::Attrs> & origin, const std::optional<rgw::sal::Attrs> & dest) {
+void compareBucketAttrs(
+    const std::optional<rgw::sal::Attrs>& origin,
+    const std::optional<rgw::sal::Attrs>& dest
+) {
   ASSERT_EQ(origin.has_value(), true);
   ASSERT_EQ(origin.has_value(), dest.has_value());
   auto orig_acl_bl_it = origin->find(RGW_ATTR_ACL);
@@ -127,7 +131,7 @@ void compareBucketAttrs(const std::optional<rgw::sal::Attrs> & origin, const std
   ASSERT_EQ(orig_aclp, dest_aclp);
 }
 
-void compareBuckets(const DBOPBucketInfo & origin, const DBOPBucketInfo & dest) {
+void compareBuckets(const DBOPBucketInfo& origin, const DBOPBucketInfo& dest) {
   compareBucketRGWInfo(origin.binfo, dest.binfo);
   compareBucketAttrs(origin.battrs, dest.battrs);
   ASSERT_EQ(origin.deleted, dest.deleted);
@@ -135,11 +139,11 @@ void compareBuckets(const DBOPBucketInfo & origin, const DBOPBucketInfo & dest) 
 
 bool randomBool() {
   std::random_device generator;
-  std::uniform_int_distribution<int> distribution(0,1);
+  std::uniform_int_distribution<int> distribution(0, 1);
   return static_cast<bool>(distribution(generator));
 }
 
-DBOPBucketInfo createTestBucket(const std::string & suffix) {
+DBOPBucketInfo createTestBucket(const std::string& suffix) {
   DBOPBucketInfo bucket;
   bucket.binfo.bucket.name = "test" + suffix;
   bucket.binfo.bucket.tenant = "Tenant" + suffix;
@@ -173,7 +177,7 @@ DBOPBucketInfo createTestBucket(const std::string & suffix) {
   bucket.deleted = randomBool();
 
   //object locking
-  mockable::RGWObjectLock &ol = mockable::actual2mock(bucket.binfo.obj_lock);
+  mockable::RGWObjectLock& ol = mockable::actual2mock(bucket.binfo.obj_lock);
   ol.enabled = true;
   ol.rule.defaultRetention.years = 12;
   ol.rule.defaultRetention.days = 31;
@@ -183,10 +187,10 @@ DBOPBucketInfo createTestBucket(const std::string & suffix) {
   return bucket;
 }
 
-void createDBBucketBasic(const std::string & user,
-                         const std::string & name,
-                         const std::string & bucket_id,
-                         const std::shared_ptr<DBConn> & conn) {
+void createDBBucketBasic(
+    const std::string& user, const std::string& name,
+    const std::string& bucket_id, const std::shared_ptr<DBConn>& conn
+) {
   auto storage = conn->get_storage();
   DBBucket db_bucket;
   db_bucket.bucket_name = name;
@@ -195,8 +199,9 @@ void createDBBucketBasic(const std::string & user,
   storage.replace(db_bucket);
 }
 
-void deleteDBBucketBasic(const std::string & bucket_id,
-                        const std::shared_ptr<DBConn> & conn) {
+void deleteDBBucketBasic(
+    const std::string& bucket_id, const std::shared_ptr<DBConn>& conn
+) {
   auto storage = conn->get_storage();
   auto bucket = storage.get_pointer<DBBucket>(bucket_id);
   ASSERT_TRUE(bucket != nullptr);
@@ -333,7 +338,6 @@ TEST_F(TestSFSSQLiteBuckets, ListBucketsIDsPerUser) {
   createUser("user1", conn);
   createUser("user2", conn);
   createUser("user3", conn);
-
 
   auto db_buckets = std::make_shared<SQLiteBuckets>(conn);
 
@@ -514,7 +518,7 @@ TEST_F(TestSFSSQLiteBuckets, UseStorage) {
 TEST_F(TestSFSSQLiteBuckets, CreateBucketForNonExistingUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  
+
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   // Create the user, we need it because OwnerID is a foreign key of User::UserID
   createUser("usertest", conn);
@@ -526,16 +530,21 @@ TEST_F(TestSFSSQLiteBuckets, CreateBucketForNonExistingUser) {
   db_bucket.bucket_name = "test_storage";
   db_bucket.owner_id = "this_user_does_not_exist";
 
-  EXPECT_THROW({
-    try {
-        storage.replace(db_bucket);;
-    } catch( const std::system_error & e ) {
-        EXPECT_STREQ( "FOREIGN KEY constraint failed: constraint failed", e.what() );
-        throw;
-    }
-  }, std::system_error );
+  EXPECT_THROW(
+      {
+        try {
+          storage.replace(db_bucket);
+          ;
+        } catch (const std::system_error& e) {
+          EXPECT_STREQ(
+              "FOREIGN KEY constraint failed: constraint failed", e.what()
+          );
+          throw;
+        }
+      },
+      std::system_error
+  );
 }
-
 
 TEST_F(TestSFSSQLiteBuckets, CreateBucketOwnerNotSet) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
@@ -551,14 +560,19 @@ TEST_F(TestSFSSQLiteBuckets, CreateBucketOwnerNotSet) {
   DBBucket db_bucket;
   db_bucket.bucket_name = "test_storage";
 
-  EXPECT_THROW({
-    try {
-        storage.replace(db_bucket);
-    } catch( const std::system_error & e ) {
-        EXPECT_STREQ( "FOREIGN KEY constraint failed: constraint failed", e.what() );
-        throw;
-    }
-  }, std::system_error );
+  EXPECT_THROW(
+      {
+        try {
+          storage.replace(db_bucket);
+        } catch (const std::system_error& e) {
+          EXPECT_STREQ(
+              "FOREIGN KEY constraint failed: constraint failed", e.what()
+          );
+          throw;
+        }
+      },
+      std::system_error
+  );
 }
 
 TEST_F(TestSFSSQLiteBuckets, GetDeletedBucketsIds) {
@@ -599,4 +613,52 @@ TEST_F(TestSFSSQLiteBuckets, GetDeletedBucketsIds) {
   EXPECT_EQ(deleted_bucket_ids[0], "bucket3_id");
   EXPECT_EQ(deleted_bucket_ids[1], "bucket5_id");
   EXPECT_EQ(deleted_bucket_ids[2], "bucket1_id");
+}
+
+TEST_F(TestSFSSQLiteBuckets, TestBucketEmpty) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+  // Create the user, we need it because OwnerID is a foreign key of User::UserID
+  createUser("usertest", conn);
+  // create a bucket
+  createDBBucketBasic("usertest", "bucket1", "bucket1_id", conn);
+
+  // after bucket is created it is empty
+  auto db_buckets = std::make_shared<SQLiteBuckets>(conn);
+  EXPECT_TRUE(db_buckets->bucket_empty("bucket1_id"));
+
+  // create an object and version (version is OPEN)
+  auto db_versions = std::make_shared<SQLiteVersionedObjects>(conn);
+  auto version1 = db_versions->create_new_versioned_object_transact(
+      "bucket1_id", "object_1", "version1"
+  );
+  ASSERT_TRUE(version1.has_value());
+
+  // with 1 version (OPEN) bucket is considered empty
+  EXPECT_TRUE(db_buckets->bucket_empty("bucket1_id"));
+
+  // commit version1
+  version1->object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  db_versions->store_versioned_object(*version1);
+  // bucket is not empty now
+  EXPECT_FALSE(db_buckets->bucket_empty("bucket1_id"));
+
+  // add a delete marker
+  bool delete_marker_added = false;
+  db_versions->add_delete_marker_transact(
+      version1->object_id, "delete_maker_1", delete_marker_added
+  );
+  ASSERT_TRUE(delete_marker_added);
+
+  // bucket is still not empty
+  EXPECT_FALSE(db_buckets->bucket_empty("bucket1_id"));
+
+  // now delete version1
+  version1->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versions->store_versioned_object(*version1);
+
+  // now bucket should be empty (all versions are deleted)
+  EXPECT_TRUE(db_buckets->bucket_empty("bucket1_id"));
 }
