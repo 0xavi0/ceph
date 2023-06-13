@@ -29,6 +29,7 @@
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/sqlite_multipart.h"
 #include "rgw_common.h"
+#include "rgw_obj_manifest.h"
 #include "rgw_sal.h"
 #include "rgw_sal_sfs.h"
 
@@ -335,6 +336,20 @@ int SFSAtomicWriter::complete(
       obj_retention.encode(bl);
       attrs[RGW_ATTR_OBJECT_RETENTION] = bl;
     }
+  }
+
+  // Server-side encryption: The decryptor needs a manifest to
+  // identify encrypted chunks. The whole atomic upload is a chunk.
+  if (attrs.find(RGW_ATTR_CRYPT_MODE) != attrs.end()) {
+    RGWObjManifest manifest;
+    RGWObjManifestPart chunk;
+    chunk.loc = rgw_obj(bucketref->get_bucket(), obj.get_key());
+    chunk.loc_ofs = 0;
+    chunk.size = bytes_written;
+    map<uint64_t, RGWObjManifestPart> objs;
+    objs[0] = chunk;
+    manifest.set_explicit(bytes_written, objs);
+    encode(manifest, attrs[RGW_ATTR_MANIFEST]);
   }
 
   objref->update_attrs(attrs);
