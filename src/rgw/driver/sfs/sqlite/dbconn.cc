@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <system_error>
 
+#include "common/dout.h"
+
 namespace fs = std::filesystem;
 namespace orm = sqlite_orm;
 
@@ -15,11 +17,11 @@ std::string get_temporary_db_path(CephContext* ctt) {
   return db_path.string();
 }
 
-void DBConn::check_metadata_is_compatible(CephContext* ctt) {
+void DBConn::check_metadata_is_compatible(CephContext* cct) {
   // create a copy of the actual metadata
-  fs::copy(getDBPath(ctt), get_temporary_db_path(ctt));
+  fs::copy(getDBPath(cct), get_temporary_db_path(cct));
   try {
-    fs::copy(getDBPath(ctt) + "-wal", get_temporary_db_path(ctt) + "-wal");
+    fs::copy(getDBPath(cct) + "-wal", get_temporary_db_path(cct) + "-wal");
   } catch (const std::filesystem::filesystem_error& e) {
     if (e.code() != std::errc::no_such_file_or_directory) {
       throw e;
@@ -28,7 +30,7 @@ void DBConn::check_metadata_is_compatible(CephContext* ctt) {
 
   // try to sync the storage based on the temporary db
   // in case something goes wrong show possible errors and return
-  auto test_storage = _make_storage(get_temporary_db_path(ctt));
+  auto test_storage = _make_storage(get_temporary_db_path(cct));
   test_storage.open_forever();
   test_storage.busy_timeout(5000);
   bool sync_error = false;
@@ -62,10 +64,10 @@ void DBConn::check_metadata_is_compatible(CephContext* ctt) {
     sync_error = true;
   }
   // remove the temporary db
-  fs::remove(get_temporary_db_path(ctt));
+  fs::remove(get_temporary_db_path(cct));
 
   try {
-    fs::remove(get_temporary_db_path(ctt) + "-wal");
+    fs::remove(get_temporary_db_path(cct) + "-wal");
   } catch (const std::filesystem::filesystem_error& e) {
     if (e.code() != std::errc::no_such_file_or_directory) {
       throw e;
@@ -76,6 +78,31 @@ void DBConn::check_metadata_is_compatible(CephContext* ctt) {
   if (sync_error) {
     throw sqlite_sync_exception(
         "ERROR ACCESSING SFS METADATA. " + result_message
+    );
+  }
+}
+
+void DBConn::check_metadata_version_is_compatible(CephContext* ctt) {
+  int db_version = 0;
+  try {
+    db_version = storage.pragma.user_version();
+    lsubdout(ctt, rgw, 10) << "db user version: " << db_version << dendl;
+  } catch (const std::system_error& e) {
+    lsubdout(ctt, rgw, -1) << "error opening db: " << e.code().message() << " ("
+                           << e.code().value() << "), " << e.what() << dendl;
+    throw e;
+  }
+
+  if (db_version == 0) {
+    // must have just been created, set version!
+    storage.pragma.user_version(SFS_METADATA_VERSION);
+  } else if (db_version < SFS_METADATA_VERSION) {
+    // perform schema update
+    throw sqlite_sync_exception("Existing metadata format too old!");
+  } else if (db_version > SFS_METADATA_VERSION) {
+    // we won't be able to read a database in the future.
+    throw sqlite_sync_exception(
+        "Existing metadata too far ahead! Please upgrade!"
     );
   }
 }

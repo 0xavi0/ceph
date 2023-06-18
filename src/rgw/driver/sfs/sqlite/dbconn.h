@@ -28,6 +28,8 @@
 
 namespace rgw::sal::sfs::sqlite {
 
+constexpr int SFS_METADATA_VERSION = 1;
+
 constexpr std::string_view SCHEMA_DB_NAME = "s3gw.db";
 
 constexpr std::string_view USERS_TABLE = "users";
@@ -218,6 +220,7 @@ class DBConn {
     };
     storage.open_forever();
     storage.busy_timeout(5000);
+    check_metadata_version_is_compatible(cct);
     check_metadata_is_compatible(cct);
     storage.sync_schema();
   }
@@ -235,7 +238,8 @@ class DBConn {
     return db_path.string();
   }
 
-  void check_metadata_is_compatible(CephContext* ctt);
+  void check_metadata_version_is_compatible(CephContext* ctt);
+  void check_metadata_is_compatible(CephContext* cct);
 };
 
 using DBConnRef = std::shared_ptr<DBConn>;
