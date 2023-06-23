@@ -14,8 +14,10 @@
 
 #include "rgw/driver/sfs/types.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <system_error>
 
 #include "rgw/driver/sfs/object_state.h"
 #include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
@@ -23,6 +25,7 @@
 #include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
 #include "rgw/driver/sfs/types.h"
 #include "rgw/rgw_sal_sfs.h"
+#include "rgw_obj_types.h"
 #include "rgw_sal_sfs.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -42,6 +45,14 @@ Object* Object::create_for_immediate_deletion(const sqlite::DBObject& object) {
   Object* result = new Object(object.name, object.uuid);
   result->deleted = true;
   return result;
+}
+
+void Object::delete_version_data(
+    SFStore* store, const uuid_d& uuid, uint version_id
+) {
+  Object* result = new Object(rgw_obj_key(), uuid);
+  result->version_id = version_id;
+  result->delete_object_data(store);
 }
 
 Object* Object::create_for_query(
@@ -250,14 +261,15 @@ void Object::delete_object_metadata(SFStore* store) const {
   db_objs.remove_object(path.get_uuid());
 }
 
-void Object::delete_object_data(SFStore* store, bool all) const {
-  if (all) {
-    // remove object folder
-    std::filesystem::remove(store->get_data_path() / path.to_path());
-  } else {
-    // remove object data
-    std::filesystem::remove(store->get_data_path() / get_storage_path());
-  }
+void Object::delete_object_data(SFStore* store) const {
+  // remove object version data
+  std::filesystem::remove(store->get_data_path() / get_storage_path());
+  auto folder_path = store->get_data_path() / path.to_path();
+  // try to delete the parent folder
+  // it won't be deleted if it's not empty.
+  std::error_code delete_folder_error;
+  // use the overload that throws no exception
+  std::filesystem::remove(folder_path, delete_folder_error);
 }
 
 ObjectRef Bucket::create_version(const rgw_obj_key& key) const {

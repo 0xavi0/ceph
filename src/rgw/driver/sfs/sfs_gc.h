@@ -27,7 +27,9 @@ class SFSGC : public DoutPrefixProvider {
   SFStore* store = nullptr;
   std::atomic<bool> down_flag = {true};
   std::atomic<bool> suspend_flag = {false};
-  long int max_objects;
+  std::chrono::milliseconds max_process_time;
+  utime_t initial_process_time;
+  uint64_t max_objects_to_delete_per_iteration;
 
   class GCWorker : public Thread {
     const DoutPrefixProvider* dpp = nullptr;
@@ -67,15 +69,21 @@ class SFSGC : public DoutPrefixProvider {
   std::string get_cls_name() const { return "SFSGC"; }
 
  private:
-  void process_deleted_buckets();
+  // Return false if it was forced to exit because max process time was met
+  // which means there are still objects to be deleted
+  bool process_deleted_buckets();
+  bool process_deleted_objects(bool& more_objects);
+  bool delete_bucket(const std::string& bucket_id, bool& bucket_deleted);
+  bool delete_pending_objects_data();
+  bool delete_pending_multiparts_data();
+  bool abort_bucket_multiparts(const std::string& bucket_id);
+  bool delete_bucket_multiparts(
+      const std::string& bucket_id, bool& all_parts_deleted
+  );
+  bool process_time_elapsed() const;
 
-  void delete_multiparts(const std::string& bucket_id);
-  void delete_objects(const std::string& bucket_id);
-  void delete_versioned_objects(const Object& object);
-
-  void delete_bucket(const std::string& bucket_id);
-  void delete_object(const Object& object);
-  void delete_versioned_object(const Object& object);
+  std::optional<sqlite::DBDeletedObjectItems> pending_objects_to_delete;
+  std::optional<sqlite::DBDeletedMultipartItems> pending_multiparts_to_delete;
 };
 
 }  //  namespace rgw::sal::sfs

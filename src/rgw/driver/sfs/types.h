@@ -75,6 +75,9 @@ class Object {
 
  public:
   static Object* create_for_immediate_deletion(const sqlite::DBObject& object);
+  static void delete_version_data(
+      SFStore* store, const uuid_d& uuid, uint version_id
+  );
   static Object* create_for_query(
       const std::string& name, const uuid_d& uuid, bool deleted, uint version_id
   );
@@ -121,8 +124,7 @@ class Object {
   int delete_object_version(rgw::sal::SFStore* store) const;
   void delete_object_metadata(rgw::sal::SFStore* store) const;
   /// Delete object _data_ (e.g payload of PUT operations) from disk.
-  // Set all=true to delete all versions, not just this version.
-  void delete_object_data(rgw::sal::SFStore* store, bool all) const;
+  void delete_object_data(SFStore* store) const;
 };
 
 using ObjectRef = std::shared_ptr<Object>;

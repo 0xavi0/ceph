@@ -7,12 +7,15 @@
 #include <memory>
 
 #include "common/ceph_context.h"
+#include "driver/sfs/object_state.h"
+#include "driver/sfs/sqlite/versioned_object/versioned_object_definitions.h"
+#include "driver/sfs/version_type.h"
+#include "rgw/driver/sfs/object_state.h"
 #include "rgw/driver/sfs/sqlite/dbconn.h"
 #include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
 #include "rgw/driver/sfs/sqlite/sqlite_users.h"
 #include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
-#include "rgw/driver/sfs/object_state.h"
 #include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
@@ -1097,9 +1100,10 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateAndDeleteRest) {
   auto object_2 = db_versioned_objects->get_versioned_object(2, false);
   ASSERT_TRUE(object_2.has_value());
   object_2->object_state = rgw::sal::sfs::ObjectState::COMMITTED;
-  ASSERT_TRUE(db_versioned_objects->store_versioned_object_delete_committed_transact_if_state(
-      *object_2,
-      {rgw::sal::sfs::ObjectState::OPEN}));
+  ASSERT_TRUE(db_versioned_objects
+                  ->store_versioned_object_delete_committed_transact_if_state(
+                      *object_2, {rgw::sal::sfs::ObjectState::OPEN}
+                  ));
 
   // all the rest should be updated (but only for that object)
   auto object_ret = db_versioned_objects->get_versioned_object(1, false);
@@ -1347,4 +1351,343 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestAddDeleteMarker) {
   );
   EXPECT_FALSE(added);
   EXPECT_EQ(0, id);
+}
+
+void insertNCommittedVersionsIncrementingSize(
+    const std::string& object_id, uint num_versions, uint& version_id,
+    uint& incrementing_size, std::shared_ptr<SQLiteVersionedObjects> db_versions
+) {
+  for (uint i = 0; i < num_versions; ++i) {
+    auto version = createTestVersionedObject(
+        version_id, object_id, std::to_string(version_id)
+    );
+    version.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+    version.version_type = rgw::sal::sfs::VersionType::REGULAR;
+    version.size = incrementing_size++;
+    EXPECT_EQ(version_id, db_versions->insert_versioned_object(version));
+    version_id++;
+  }
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestRemovedDeletedVersions) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  auto max_objects_per_iteration = ceph_context->_conf.get_val<uint64_t>(
+      "rgw_sfs_gc_max_objects_per_iteration"
+  );
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // create 3 objects
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+  );
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_3, ceph_context.get(), conn
+  );
+
+  // create 3 versions for each object, incrementing the size by 1
+  uint version_id = 1;
+  uint incrementing_size = 10;
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID, 3, version_id, incrementing_size, db_versioned_objects
+  );
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID_2, 3, version_id, incrementing_size, db_versioned_objects
+  );
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID_3, 3, version_id, incrementing_size, db_versioned_objects
+  );
+
+  // remove deleted versions should not remove anything
+  auto deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  auto deleted_objs = (*deleted_objs_optional);
+  EXPECT_EQ(0, deleted_objs.size());
+  // get all versions, non filtered
+  auto versions = db_versioned_objects->get_versioned_object_ids(false);
+  EXPECT_EQ(9, versions.size());
+
+  // delete 1 version on each object
+  // versions 1, 4, and 7
+  auto version = db_versioned_objects->get_versioned_object(1);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  version = db_versioned_objects->get_versioned_object(4);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  version = db_versioned_objects->get_versioned_object(7);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  // remove deleted versions.
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  // we should have 3 entries now and they should be in descending order
+  ASSERT_EQ(3, deleted_objs.size());
+  // as size was set when incrementing the version id we should find versions
+  // is this order: 7, 4, 1
+  EXPECT_EQ(7, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[0]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_3,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[0]).to_string()
+  );
+  EXPECT_EQ(4, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[1]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_2,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[1]).to_string()
+  );
+  EXPECT_EQ(1, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[2]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[2]).to_string()
+  );
+
+  // we should have 6 versions now
+  versions = db_versioned_objects->get_versioned_object_ids(false);
+  EXPECT_EQ(6, versions.size());
+
+  uuid_d uuid_object_1;
+  uuid_object_1.parse(TEST_OBJECT_ID.c_str());
+
+  // add a delete marker on the first object
+  bool delete_marker_added = false;
+  db_versioned_objects->add_delete_marker_transact(
+      uuid_object_1, "delete_marker_1", delete_marker_added
+  );
+  EXPECT_TRUE(delete_marker_added);
+
+  // call to delete again, nothing should be deleted
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  EXPECT_EQ(0, deleted_objs.size());
+
+  // delete one version on object 1
+  version = db_versioned_objects->get_versioned_object(2);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  // that version only should be gone
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(1, deleted_objs.size());
+  version = db_versioned_objects->get_versioned_object(2);
+  ASSERT_FALSE(version.has_value());
+  EXPECT_EQ(2, get_version_id(deleted_objs[0]));
+
+  // and finally delete the last regular version on object1
+  version = db_versioned_objects->get_versioned_object(3);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  // only the committed object is returned (delete markers are not returned here
+  // because they don't use and filesystem space)
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(1, deleted_objs.size());
+  version = db_versioned_objects->get_versioned_object(1);
+  ASSERT_FALSE(version.has_value());
+  EXPECT_EQ(3, get_version_id(deleted_objs[0]));
+
+  // the object itself should be gone now (which means the delete marker was
+  // also gone)
+  auto db_objects = std::make_shared<SQLiteObjects>(conn);
+  auto object_1 = db_objects->get_object(uuid_object_1);
+  EXPECT_FALSE(object_1.has_value());
+
+  // remove the other versions in the other 2 objects
+  // versions 5, 6, 8 and 9
+  version = db_versioned_objects->get_versioned_object(5);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+  version = db_versioned_objects->get_versioned_object(6);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+  version = db_versioned_objects->get_versioned_object(8);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+  version = db_versioned_objects->get_versioned_object(9);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+}
+
+TEST_F(TestSFSSQLiteVersionedObjects, TestRemovedDeletedVersionsLimitMax) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_conf.set_val("rgw_sfs_gc_max_objects_per_iteration", "2");
+  auto max_objects_per_iteration = ceph_context->_conf.get_val<uint64_t>(
+      "rgw_sfs_gc_max_objects_per_iteration"
+  );
+  ASSERT_EQ(2, max_objects_per_iteration);
+
+  EXPECT_FALSE(fs::exists(getDBFullPath()));
+  DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
+
+  auto db_versioned_objects = std::make_shared<SQLiteVersionedObjects>(conn);
+
+  // create 3 objects
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID, ceph_context.get(), conn
+  );
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_2, ceph_context.get(), conn
+  );
+  createObject(
+      TEST_USERNAME, TEST_BUCKET, TEST_OBJECT_ID_3, ceph_context.get(), conn
+  );
+
+  // create 3 versions for each object, incrementing the size by 1
+  uint version_id = 1;
+  uint incrementing_size = 10;
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID, 3, version_id, incrementing_size, db_versioned_objects
+  );
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID_2, 3, version_id, incrementing_size, db_versioned_objects
+  );
+  insertNCommittedVersionsIncrementingSize(
+      TEST_OBJECT_ID_3, 3, version_id, incrementing_size, db_versioned_objects
+  );
+
+  // remove deleted versions should not remove anything
+  auto deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  auto deleted_objs = (*deleted_objs_optional);
+  EXPECT_EQ(0, deleted_objs.size());
+  // get all versions, non filtered
+  auto versions = db_versioned_objects->get_versioned_object_ids(false);
+  EXPECT_EQ(9, versions.size());
+
+  // delete 1 version on each object
+  // versions 1, 4, and 7
+  auto version = db_versioned_objects->get_versioned_object(1);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  version = db_versioned_objects->get_versioned_object(4);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  version = db_versioned_objects->get_versioned_object(7);
+  ASSERT_TRUE(version.has_value());
+  version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+  db_versioned_objects->store_versioned_object(*version);
+
+  // remove deleted versions, it should remove 2 versions
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  // we should have 2 entries now and they should be in descending order
+  ASSERT_EQ(2, deleted_objs.size());
+  // as size was set when incrementing the version id we should find versions
+  // is this order: 7, 4
+  EXPECT_EQ(7, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[0]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_3,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[0]).to_string()
+  );
+  EXPECT_EQ(4, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[1]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_2,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[1]).to_string()
+  );
+
+  // we should have 7 versions now
+  versions = db_versioned_objects->get_versioned_object_ids(false);
+  EXPECT_EQ(7, versions.size());
+
+  // try anther round, it should delete now the remaining object
+  deleted_objs_optional =
+      db_versioned_objects->remove_deleted_versions_transact(
+          max_objects_per_iteration
+      );
+  ASSERT_TRUE(deleted_objs_optional.has_value());
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(1, deleted_objs.size());
+  EXPECT_EQ(1, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[0]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[0]).to_string()
+  );
+
+  // we should have 6 versions now
+  versions = db_versioned_objects->get_versioned_object_ids(false);
+  EXPECT_EQ(6, versions.size());
+
+  // try to delete the bucket. it should also remove 2 objects per iteration.
+  auto db_buckets = std::make_shared<SQLiteBuckets>(conn);
+  bool bucket_fully_deleted = false;
+  deleted_objs_optional = db_buckets->delete_bucket_transact(
+      TEST_BUCKET, max_objects_per_iteration, bucket_fully_deleted
+  );
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(2, deleted_objs.size());
+  EXPECT_FALSE(bucket_fully_deleted);
+  EXPECT_EQ(9, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[0]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_3,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[0]).to_string()
+  );
+  EXPECT_EQ(8, rgw::sal::sfs::sqlite::get_version_id(deleted_objs[1]));
+  EXPECT_EQ(
+      TEST_OBJECT_ID_3,
+      rgw::sal::sfs::sqlite::get_uuid(deleted_objs[1]).to_string()
+  );
+
+  deleted_objs_optional = db_buckets->delete_bucket_transact(
+      TEST_BUCKET, max_objects_per_iteration, bucket_fully_deleted
+  );
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(2, deleted_objs.size());
+  EXPECT_FALSE(bucket_fully_deleted);
+  deleted_objs_optional = db_buckets->delete_bucket_transact(
+      TEST_BUCKET, max_objects_per_iteration, bucket_fully_deleted
+  );
+  deleted_objs = (*deleted_objs_optional);
+  ASSERT_EQ(2, deleted_objs.size());
+  EXPECT_TRUE(bucket_fully_deleted);
 }

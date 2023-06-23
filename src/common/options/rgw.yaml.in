@@ -3776,6 +3776,15 @@ options:
   desc: RGW SFS store data dir
   service:
     - rgw
+- name: rgw_sfs_gc_max_objects_per_iteration
+  type: uint
+  level: advanced
+  default: 100
+  desc:
+    Maximum number of objects that the garbage collector is allowed to delete
+    per iteration.
+  service:
+    - rgw
 - name: rgw_sfs_stats_update_interval
   type: millisecs
   level: advanced
@@ -3796,6 +3805,15 @@ options:
   level: advanced
   default: true
   desc: Enable S3GW telemetry updates
+  service:
+    - rgw
+- name: rgw_sfs_gc_max_process_time
+  type: millisecs
+  level: advanced
+  default: 2000
+  desc:
+    Maximum time (in milliseconds) that garbage collector is allowed to run in a 
+    execucion cycle.
   service:
     - rgw
 - name: rgw_s3gw_telemetry_upgrade_responder_url

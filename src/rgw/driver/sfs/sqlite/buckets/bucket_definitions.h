@@ -15,8 +15,10 @@
 
 #include <string>
 
+#include "driver/sfs/sqlite/buckets/multipart_definitions.h"
+#include "rgw/driver/sfs/sqlite/objects/object_definitions.h"
+#include "rgw/driver/sfs/sqlite/versioned_object/versioned_object_definitions.h"
 #include "rgw_common.h"
-
 namespace rgw::sal::sfs::sqlite {
 
 using BLOB = std::vector<char>;
@@ -72,4 +74,19 @@ struct DBOPBucketInfo {
   DBOPBucketInfo& operator=(const DBOPBucketInfo& other) = default;
 };
 
+using DBDeletedObjectItem =
+    std::tuple<decltype(DBObject::uuid), decltype(DBVersionedObject::id)>;
+
+using DBDeletedObjectItems = std::vector<DBDeletedObjectItem>;
+
+/// DBDeletedObjectItem helpers
+inline decltype(DBObject::uuid) get_uuid(const DBDeletedObjectItem& item) {
+  return std::get<0>(item);
+}
+
+inline decltype(DBVersionedObject::id) get_version_id(
+    const DBDeletedObjectItem& item
+) {
+  return std::get<1>(item);
+}
 }  // namespace rgw::sal::sfs::sqlite

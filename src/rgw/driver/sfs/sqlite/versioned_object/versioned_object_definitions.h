@@ -21,6 +21,7 @@
 #include "rgw/driver/sfs/sqlite/bindings/blob.h"
 #include "rgw/driver/sfs/sqlite/bindings/enum.h"
 #include "rgw/driver/sfs/sqlite/bindings/real_time.h"
+#include "rgw/driver/sfs/sqlite/objects/object_definitions.h"
 #include "rgw/driver/sfs/version_type.h"
 #include "rgw/rgw_common.h"
 #include "rgw_common.h"

@@ -16,6 +16,10 @@
 #include <driver/sfs/sqlite/buckets/bucket_definitions.h>
 #include <driver/sfs/sqlite/users/users_definitions.h>
 
+#include "objects/object_definitions.h"
+#include "retry.h"
+#include "versioned_object/versioned_object_definitions.h"
+
 using namespace sqlite_orm;
 
 namespace rgw::sal::sfs::sqlite {
@@ -129,6 +133,56 @@ bool SQLiteBuckets::bucket_empty(const std::string& bucket_id) const {
       )
   );
   return num_ids == 0;
+}
+
+std::optional<DBDeletedObjectItems> SQLiteBuckets::delete_bucket_transact(
+    const std::string& bucket_id, uint max_objects, bool& bucket_deleted
+) const {
+  auto storage = conn->get_storage();
+  RetrySQLite<DBDeletedObjectItems> retry([&]() {
+    bucket_deleted = false;
+    DBDeletedObjectItems ret_values;
+    storage.begin_transaction();
+    // first get all the objects and versions for that bucket
+    ret_values = storage.select(
+        columns(&DBObject::uuid, &DBVersionedObject::id),
+        inner_join<DBObject>(
+            on(is_equal(&DBObject::uuid, &DBVersionedObject::object_id))
+        ),
+        where(is_equal(&DBObject::bucket_id, bucket_id)),
+        order_by(&DBVersionedObject::size).desc(), limit(max_objects)
+    );
+    for (auto const& uuid_version : ret_values) {
+      // remove the versions first
+      storage.remove<DBVersionedObject>(std::get<1>(uuid_version));
+      // try to delete the object (it will throw an exception if it's not
+      // empty yet)
+      // possible errors when object is not empty are:
+      // SQLITE_CONSTRAINT: legacy sqlite error
+      // SQLITE_CONSTRAINT_FOREIGNKEY: extended sqlite error
+      try {
+        storage.remove<DBObject>(std::get<0>(uuid_version));
+      } catch (const std::system_error& e) {
+        if (e.code().value() != SQLITE_CONSTRAINT_FOREIGNKEY &&
+            e.code().value() != SQLITE_CONSTRAINT) {
+          throw(e);
+        }
+      }
+    }
+    // try to delete the bucket
+    try {
+      storage.remove<DBBucket>(bucket_id);
+      bucket_deleted = true;
+    } catch (const std::system_error& e) {
+      if (e.code().value() != SQLITE_CONSTRAINT_FOREIGNKEY &&
+          e.code().value() != SQLITE_CONSTRAINT) {
+        throw(e);
+      }
+    }
+    storage.commit();
+    return ret_values;
+  });
+  return retry.run();
 }
 
 }  // namespace rgw::sal::sfs::sqlite

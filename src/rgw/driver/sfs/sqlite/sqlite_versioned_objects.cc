@@ -13,9 +13,13 @@
  */
 #include "sqlite_versioned_objects.h"
 
+#include <sqlite_orm/sqlite_orm.h>
+
 #include <stdexcept>
+#include <system_error>
 
 #include "driver/sfs/object_state.h"
+#include "driver/sfs/version_type.h"
 #include "retry.h"
 #include "rgw/driver/sfs/uuid_path.h"
 #include "versioned_object/versioned_object_definitions.h"
@@ -488,6 +492,58 @@ SQLiteVersionedObjects::create_new_versioned_object_transact(
     version.id = storage.insert(version);
     transaction.commit();
     return version;
+  });
+  return retry.run();
+}
+
+std::optional<DBDeletedObjectItems>
+SQLiteVersionedObjects::remove_deleted_versions_transact(uint max_objects
+) const {
+  DBDeletedObjectItems ret_objs;
+  auto storage = conn->get_storage();
+  RetrySQLite<DBDeletedObjectItems> retry([&]() {
+    auto transaction = storage.transaction_guard();
+    // get first the list of objects to be deleted up to max_objects
+    // order by size so when we delete the versions data we are more efficient
+    ret_objs = storage.select(
+        columns(&DBVersionedObject::object_id, &DBVersionedObject::id),
+        where(is_equal(&DBVersionedObject::object_state, ObjectState::DELETED)),
+        order_by(&DBVersionedObject::size).desc(), limit(max_objects)
+    );
+    if (ret_objs.size() == 0) {
+      // nothing to be deleted. We can return now
+      // no need to commit the transaction as nothing was changed
+      return ret_objs;
+    }
+    // remove all deleted versions up to max_objects
+    storage.remove_all<DBVersionedObject>(
+        where(is_equal(&DBVersionedObject::object_state, ObjectState::DELETED)),
+        order_by(&DBVersionedObject::size).desc(), limit(max_objects)
+    );
+    // now check if the object is empty
+    for (auto const& obj : ret_objs) {
+      auto nb_versions = storage.count(
+          &DBVersionedObject::id,
+          where(
+              is_equal(
+                  &DBVersionedObject::version_type, VersionType::REGULAR
+              ) and
+              is_equal(&DBVersionedObject::object_id, std::get<0>(obj))
+          )
+      );
+      if (nb_versions == 0) {
+        // delete possible delete marker first
+        storage.remove_all<DBVersionedObject>(where(
+            is_equal(
+                &DBVersionedObject::version_type, VersionType::DELETE_MARKER
+            ) and
+            is_equal(&DBVersionedObject::object_id, std::get<0>(obj))
+        ));
+        storage.remove<DBObject>(std::get<0>(obj));
+      }
+    }
+    transaction.commit();
+    return ret_objs;
   });
   return retry.run();
 }

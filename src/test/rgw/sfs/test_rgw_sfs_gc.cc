@@ -7,9 +7,16 @@
 #include <filesystem>
 #include <memory>
 #include <random>
+#include <string>
 #include <thread>
 
 #include "common/ceph_context.h"
+#include "common/ceph_time.h"
+#include "driver/sfs/object_state.h"
+#include "driver/sfs/sqlite/buckets/multipart_definitions.h"
+#include "driver/sfs/sqlite/sqlite_multipart.h"
+#include "driver/sfs/version_type.h"
+#include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sfs_gc.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
 #include "rgw/driver/sfs/sqlite/dbconn.h"
@@ -77,14 +84,10 @@ class TestSFSGC : public ::testing::Test {
     users.store_user(user);
   }
 
-  void storeRandomObjectVersion(
-      const std::shared_ptr<rgw::sal::sfs::Object>& object
-  ) {
-    std::filesystem::path object_path =
-        getTestDir() / object->get_storage_path();
-    std::filesystem::create_directories(object_path.parent_path());
+  void storeRandomFile(const std::filesystem::path& file_path) {
+    std::filesystem::create_directories(file_path.parent_path());
     auto mode = std::ofstream::binary | std::ofstream::out | std::ofstream::app;
-    std::ofstream ofs(object_path, mode);
+    std::ofstream ofs(file_path, mode);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -96,6 +99,20 @@ class TestSFSGC : public ::testing::Test {
     }
     ofs.flush();
     ofs.close();
+  }
+
+  void storeRandomPart(const uuid_d& uuid, int part_num) {
+    rgw::sal::sfs::MultipartPartPath pp(uuid, part_num);
+    auto part_path = getTestDir() / pp.to_path();
+    storeRandomFile(part_path);
+  }
+
+  void storeRandomObjectVersion(
+      const std::shared_ptr<rgw::sal::sfs::Object>& object
+  ) {
+    std::filesystem::path object_path =
+        getTestDir() / object->get_storage_path();
+    storeRandomFile(object_path);
   }
 
   void createTestBucket(const std::string& bucket_id, DBConnRef conn) {
@@ -112,6 +129,38 @@ class TestSFSGC : public ::testing::Test {
     SQLiteBuckets db_buckets(conn);
     auto bucket = db_buckets.get_bucket(bucket_id);
     return bucket.has_value();
+  }
+
+  rgw::sal::sfs::sqlite::DBOPMultipart createMultipart(
+      const std::string& bucket_id, const std::string& upload_id, DBConnRef conn
+  ) {
+    SQLiteMultipart db_multiparts(conn);
+    rgw::sal::sfs::sqlite::DBOPMultipart mp;
+    mp.bucket_id = bucket_id;
+    mp.upload_id = upload_id;
+    mp.state = rgw::sal::sfs::MultipartState::DONE;
+    mp.state_change_time = ceph::real_clock::now();
+    mp.object_name = upload_id;
+    uuid_d uuid;
+    uuid.generate_random();
+    mp.object_uuid = uuid;
+    db_multiparts.insert(mp);
+    return mp;
+  }
+
+  rgw::sal::sfs::sqlite::DBMultipartPart createMultipartPart(
+      const std::string& upload_id, const uuid_d& uuid, int part_num,
+      DBConnRef conn
+  ) {
+    SQLiteMultipart db_multiparts(conn);
+    rgw::sal::sfs::sqlite::DBMultipartPart mp;
+    auto storage = conn->get_storage();
+    mp.upload_id = upload_id;
+    mp.part_num = part_num;
+    mp.size = 123;
+    storage.insert(mp);
+    storeRandomPart(uuid, part_num);
+    return mp;
   }
 
   std::shared_ptr<rgw::sal::sfs::Object> createTestObject(
@@ -144,7 +193,7 @@ class TestSFSGC : public ::testing::Test {
     db_versioned_objects.insert_versioned_object(db_version);
   }
 
-  void deleteTestObject(
+  void deleteMarkTestObject(
       std::shared_ptr<rgw::sal::sfs::Object>& object, DBConnRef conn
   ) {
     // delete mark the object
@@ -152,25 +201,25 @@ class TestSFSGC : public ::testing::Test {
     auto last_version =
         db_versioned_objects.get_last_versioned_object(object->path.get_uuid());
     ASSERT_TRUE(last_version.has_value());
-    last_version->object_state = rgw::sal::sfs::ObjectState::DELETED;
-    last_version->version_id.append("_next_");
+    last_version->version_type = rgw::sal::sfs::VersionType::DELETE_MARKER;
+    last_version->version_id.append("delete_marker");
     last_version->version_id.append(std::to_string(last_version->id));
     db_versioned_objects.insert_versioned_object(*last_version);
+  }
+
+  void deleteTestObjectVersion(uint version_id, DBConnRef conn) {
+    // delete mark the object
+    SQLiteVersionedObjects db_versioned_objects(conn);
+    auto version = db_versioned_objects.get_versioned_object(version_id);
+    ASSERT_TRUE(version.has_value());
+    version->object_state = rgw::sal::sfs::ObjectState::DELETED;
+    db_versioned_objects.store_versioned_object(*version);
   }
 
   void deleteTestBucket(const std::string& bucket_id, DBConnRef conn) {
     SQLiteBuckets db_buckets(conn);
     auto bucket = db_buckets.get_bucket(bucket_id);
     ASSERT_TRUE(bucket.has_value());
-
-    SQLiteObjects db_objects(conn);
-    auto objects = db_objects.get_objects(bucket_id);
-    for (auto& object : objects) {
-      auto objptr = std::shared_ptr<rgw::sal::sfs::Object>(
-          rgw::sal::sfs::Object::create_for_immediate_deletion(object)
-      );
-      deleteTestObject(objptr, conn);
-    }
     bucket->deleted = true;
     db_buckets.store_bucket(*bucket);
   }
@@ -187,7 +236,6 @@ class TestSFSGC : public ::testing::Test {
 TEST_F(TestSFSGC, TestDeletedBuckets) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  ceph_context->_conf.set_val("rgw_gc_processor_period", "1");
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
   auto gc = store->gc;
   gc->suspend();  // start suspended so we have control over processing
@@ -230,9 +278,6 @@ TEST_F(TestSFSGC, TestDeletedBuckets) {
   // nothing should be removed permanently yet
   EXPECT_EQ(getStoreDataFileCount(), 5);
   EXPECT_TRUE(databaseFileExists());
-  versions = db_versioned_objs.get_versioned_object_ids(false);
-  // we should have 1 more version (delete marker for 1 object)
-  EXPECT_EQ(versions.size(), 6);
 
   gc->process();
 
@@ -257,15 +302,18 @@ TEST_F(TestSFSGC, TestDeletedBuckets) {
   EXPECT_FALSE(bucketExists("test_bucket_1", store->db_conn));
 }
 
-TEST_F(TestSFSGC, TestDeletedBucketsMaxObjects) {
+TEST_F(TestSFSGC, TestDeletedBucketsWithMultiparts) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  ceph_context->_conf.set_val("rgw_gc_processor_period", "1");
-  // gc will only remove 1 objects per iteration
-  ceph_context->_conf.set_val("rgw_gc_max_objs", "1");
+  uint MAX_OBJECTS_ITERATION = 1;
+  ceph_context->_conf.set_val(
+      "rgw_sfs_gc_max_objects_per_iteration",
+      std::to_string(MAX_OBJECTS_ITERATION)
+  );
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
   auto gc = store->gc;
-  gc->suspend();
+  gc->initialize();
+  gc->suspend();  // start suspended so we have control over processing
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
@@ -293,39 +341,204 @@ TEST_F(TestSFSGC, TestDeletedBucketsMaxObjects) {
   EXPECT_EQ(getStoreDataFileCount(), 5);
   EXPECT_TRUE(databaseFileExists());
 
+  // now create multiparts with a few parts
+  auto multipart1 =
+      createMultipart("test_bucket_1", "multipart1", store->db_conn);
+  auto part1_1 = createMultipartPart(
+      "multipart1", multipart1.object_uuid, 1, store->db_conn
+  );
+  auto part1_2 = createMultipartPart(
+      "multipart1", multipart1.object_uuid, 2, store->db_conn
+  );
+  auto part1_3 = createMultipartPart(
+      "multipart1", multipart1.object_uuid, 3, store->db_conn
+  );
+  auto part1_4 = createMultipartPart(
+      "multipart1", multipart1.object_uuid, 4, store->db_conn
+  );
+
+  auto multipart2 =
+      createMultipart("test_bucket_2", "multipart2", store->db_conn);
+  auto part2_1 = createMultipartPart(
+      "multipart2", multipart2.object_uuid, 1, store->db_conn
+  );
+  auto part2_2 = createMultipartPart(
+      "multipart2", multipart2.object_uuid, 2, store->db_conn
+  );
+
+  // we should have 11 files (5 version + 6 parts)
+  EXPECT_EQ(getStoreDataFileCount(), 11);
+  SQLiteVersionedObjects db_versioned_objs(store->db_conn);
+  auto versions = db_versioned_objs.get_versioned_object_ids();
+  EXPECT_EQ(versions.size(), 5);
+
   // delete bucket 2
   deleteTestBucket("test_bucket_2", store->db_conn);
+  // nothing should be removed yet
+  EXPECT_EQ(getStoreDataFileCount(), 11);
 
   gc->process();
 
-  // only 1 file should be removed
-  EXPECT_EQ(getStoreDataFileCount(), 4);
+  // only objects and parts for bucket 1 should be available
+  EXPECT_EQ(getStoreDataFileCount(), 7);
   EXPECT_TRUE(databaseFileExists());
-  // the object is still reachable in the db
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_2", store->db_conn));
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_1", store->db_conn));
-
-  gc->process();
-
-  // one more version removed
-  EXPECT_EQ(getStoreDataFileCount(), 3);
-  EXPECT_TRUE(databaseFileExists());
-  // the object is still reachable in the db (versions removed)
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_2", store->db_conn));
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_1", store->db_conn));
-
-  gc->process();
-  // one more version removed
-  EXPECT_EQ(getStoreDataFileCount(), 3);
-  EXPECT_TRUE(databaseFileExists());
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_2", store->db_conn));
-  EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_1", store->db_conn));
-
-  gc->process();
-  // one more version removed
-  EXPECT_EQ(getStoreDataFileCount(), 3);
-  EXPECT_TRUE(databaseFileExists());
-  // the object is finally removed
   EXPECT_EQ(0, getNumberObjectsForBucket("test_bucket_2", store->db_conn));
+  EXPECT_FALSE(bucketExists("test_bucket_2", store->db_conn));
   EXPECT_EQ(1, getNumberObjectsForBucket("test_bucket_1", store->db_conn));
+  EXPECT_TRUE(bucketExists("test_bucket_1", store->db_conn));
+
+  // delete bucket 1 now
+  deleteTestBucket("test_bucket_1", store->db_conn);
+  gc->process();
+
+  // only the db file should be present
+  EXPECT_EQ(getStoreDataFileCount(), 0);
+  EXPECT_TRUE(databaseFileExists());
+  EXPECT_EQ(0, getNumberObjectsForBucket("test_bucket_2", store->db_conn));
+  EXPECT_FALSE(bucketExists("test_bucket_2", store->db_conn));
+  EXPECT_EQ(0, getNumberObjectsForBucket("test_bucket_1", store->db_conn));
+  EXPECT_FALSE(bucketExists("test_bucket_1", store->db_conn));
+}
+
+TEST_F(TestSFSGC, TestDeletedObjects) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto gc = store->gc;
+  gc->suspend();  // start suspended so we have control over processing
+
+  NoDoutPrefix ndp(ceph_context.get(), 1);
+  RGWEnv env;
+  env.init(ceph_context.get());
+
+  // create the test user
+  createTestUser(store->db_conn);
+
+  // create 1 bucket
+  createTestBucket("test_bucket_1", store->db_conn);
+
+  uint version_id = 1;
+  auto object1 = createTestObject("test_bucket_1", "obj_1", store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+
+  auto object2 = createTestObject("test_bucket_1", "obj_2", store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+
+  // we should have 5 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  EXPECT_TRUE(databaseFileExists());
+
+  gc->process();
+  // we should still 5 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  EXPECT_TRUE(databaseFileExists());
+
+  // add a delete marker on object1
+  deleteMarkTestObject(object1, store->db_conn);
+
+  gc->process();
+  // we should still 5 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  EXPECT_TRUE(databaseFileExists());
+
+  // delete first version of object1
+  deleteTestObjectVersion(1, store->db_conn);
+
+  // before GC runs we should have the same files
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  gc->process();
+  // before GC runs we should have 1 file less
+  EXPECT_EQ(getStoreDataFileCount(), 4);
+
+  // delete everything now (all versions in object 1 and object 2)
+  deleteTestObjectVersion(2, store->db_conn);
+  deleteTestObjectVersion(3, store->db_conn);
+  deleteTestObjectVersion(4, store->db_conn);
+  deleteTestObjectVersion(5, store->db_conn);
+
+  // check we have the same number of files before GC hits
+  EXPECT_EQ(getStoreDataFileCount(), 4);
+  gc->process();
+  // all should be gone now
+  EXPECT_EQ(getStoreDataFileCount(), 0);
+}
+
+TEST_F(TestSFSGC, TestDeletedObjectsAndDeletedBuckets) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto gc = store->gc;
+  gc->suspend();  // start suspended so we have control over processing
+
+  NoDoutPrefix ndp(ceph_context.get(), 1);
+  RGWEnv env;
+  env.init(ceph_context.get());
+
+  // create the test user
+  createTestUser(store->db_conn);
+
+  // create 2 buckets
+  createTestBucket("test_bucket_1", store->db_conn);
+  createTestBucket("test_bucket_2", store->db_conn);
+
+  uint version_id = 1;
+  auto object1 = createTestObject("test_bucket_1", "obj_1", store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+
+  auto object2 = createTestObject("test_bucket_1", "obj_2", store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+
+  auto object3 = createTestObject("test_bucket_2", "obj_3", store->db_conn);
+  createTestObjectVersion(object3, version_id++, store->db_conn);
+  createTestObjectVersion(object3, version_id++, store->db_conn);
+
+  // we should have 7 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 7);
+
+  gc->process();
+  // we should still 7 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 7);
+
+  // add a delete marker on object1
+  deleteMarkTestObject(object1, store->db_conn);
+
+  gc->process();
+  // we should still 7 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 7);
+  EXPECT_TRUE(databaseFileExists());
+
+  // delete first version of object1
+  deleteTestObjectVersion(1, store->db_conn);
+
+  // before GC runs we should have the same files
+  EXPECT_EQ(getStoreDataFileCount(), 7);
+  gc->process();
+  // before GC runs we should have 1 file less
+  EXPECT_EQ(getStoreDataFileCount(), 6);
+
+  // delete everything now (all versions in object 1 and object 2)
+  deleteTestObjectVersion(2, store->db_conn);
+  deleteTestObjectVersion(3, store->db_conn);
+  deleteTestObjectVersion(4, store->db_conn);
+  deleteTestObjectVersion(5, store->db_conn);
+
+  // add a delete marker on object3
+  // when deleting the bucket, it will test the case of deleting delete markers
+  // from the filesystem
+  deleteMarkTestObject(object3, store->db_conn);
+
+  // also delete bucket_2 and bucket_1
+  deleteTestBucket("test_bucket_2", store->db_conn);
+  deleteTestBucket("test_bucket_1", store->db_conn);
+  // check we have the same number of files before GC hits
+  EXPECT_EQ(getStoreDataFileCount(), 6);
+  gc->process();
+  // all should be gone
+  EXPECT_EQ(getStoreDataFileCount(), 0);
 }

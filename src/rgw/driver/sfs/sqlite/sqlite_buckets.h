@@ -49,6 +49,9 @@ class SQLiteBuckets {
   std::vector<std::string> get_deleted_buckets_ids() const;
 
   bool bucket_empty(const std::string& bucket_id) const;
+  std::optional<DBDeletedObjectItems> delete_bucket_transact(
+      const std::string& bucket_id, uint max_objects, bool& bucket_deleted
+  ) const;
 };
 
 }  // namespace rgw::sal::sfs::sqlite

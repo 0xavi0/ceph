@@ -13,12 +13,19 @@
  */
 #include "sfs_gc.h"
 
+#include <driver/sfs/sqlite/buckets/multipart_definitions.h>
+
 #include <filesystem>
 
+#include "common/Clock.h"
 #include "driver/sfs/types.h"
 #include "multipart_types.h"
 #include "rgw/driver/sfs/sqlite/sqlite_multipart.h"
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
+#include "rgw_obj_types.h"
+#include "sqlite/buckets/bucket_definitions.h"
+#include "sqlite/sqlite_versioned_objects.h"
+#include "sqlite/versioned_object/versioned_object_definitions.h"
 
 namespace rgw::sal::sfs {
 
@@ -36,14 +43,26 @@ SFSGC::~SFSGC() {
 
 int SFSGC::process() {
   // This is the method that does the garbage collection.
+  initial_process_time = ceph_clock_now();
 
-  // set the maximum number of objects we can delete in this iteration
-  max_objects = cct->_conf->rgw_gc_max_objs;
-  lsfs_dout(this, 10) << "garbage collection: processing with max_objects = "
-                      << max_objects << dendl;
-
-  // For now, delete only the objects with deleted bucket.
-  process_deleted_buckets();
+  // start by deleting possible pending objects data in the filesystem
+  // this could be stopped in a previous execution due to max exec time elapsed
+  auto time_to_process_more = delete_pending_objects_data();
+  if (!time_to_process_more) {
+    return 0;
+  }
+  // now delete possible pending multiparts data
+  time_to_process_more = delete_pending_multiparts_data();
+  if (!time_to_process_more) {
+    return 0;
+  }
+  // process deleted buckets
+  time_to_process_more = process_deleted_buckets();
+  bool more_objects = true;
+  while (time_to_process_more && more_objects) {
+    // process deleted objects now in batches
+    time_to_process_more = process_deleted_objects(more_objects);
+  }
   return 0;
 }
 
@@ -57,6 +76,13 @@ bool SFSGC::going_down() {
  * SFSGC instance is a prefix provider for the logging in the worker thread
  */
 void SFSGC::initialize() {
+  max_process_time = cct->_conf.get_val<std::chrono::milliseconds>(
+      "rgw_sfs_gc_max_process_time"
+  );
+
+  max_objects_to_delete_per_iteration =
+      cct->_conf.get_val<uint64_t>("rgw_sfs_gc_max_objects_per_iteration");
+
   worker->create("rgw_gc");
   down_flag = false;
 }
@@ -77,118 +103,137 @@ std::ostream& SFSGC::gen_prefix(std::ostream& out) const {
   return out << "garbage collection: ";
 }
 
-void SFSGC::process_deleted_buckets() {
+bool SFSGC::process_deleted_buckets() {
   // permanently delete removed buckets and their objects and versions
   sqlite::SQLiteBuckets db_buckets(store->db_conn);
   auto deleted_buckets = db_buckets.get_deleted_buckets_ids();
   lsfs_dout(this, 10) << "deleted buckets found = " << deleted_buckets.size()
                       << dendl;
+  bool time_to_delete_more = true;
   for (auto const& bucket_id : deleted_buckets) {
-    if (max_objects <= 0) {
-      break;
+    time_to_delete_more = abort_bucket_multiparts(bucket_id);
+    if (!time_to_delete_more) {
+      return false;
     }
-    delete_bucket(bucket_id);
-  }
-}
-
-void SFSGC::delete_objects(const std::string& bucket_id) {
-  sqlite::SQLiteObjects db_objs(store->db_conn);
-  auto objects = db_objs.get_objects(bucket_id);
-  for (auto const& object : objects) {
-    if (max_objects <= 0) {
-      break;
+    bool all_parts_deleted = false;
+    while (time_to_delete_more && !all_parts_deleted) {
+      time_to_delete_more =
+          delete_bucket_multiparts(bucket_id, all_parts_deleted);
     }
-    auto obj_instance =
-        std::unique_ptr<Object>(Object::create_for_immediate_deletion(object));
-    delete_object(*obj_instance.get());
-  }
-}
-
-void SFSGC::delete_versioned_objects(const Object& object) {
-  sqlite::SQLiteVersionedObjects db_ver_objs(store->db_conn);
-  // get all versions. Including deleted ones
-  auto versions =
-      db_ver_objs.get_versioned_objects(object.path.get_uuid(), false);
-  for (auto const& version : versions) {
-    if (max_objects <= 0) {
-      break;
+    if (!time_to_delete_more) {
+      return false;
     }
-
-    Object to_be_deleted(object);
-    to_be_deleted.version_id = version.id;
-    delete_versioned_object(to_be_deleted);
+    // we delete buckets in batches, so we might need to call delete bucket
+    // more than once until the bucket itself is finally deleted
+    // we do this while the time to delete more stuff is not elapsed
+    bool bucket_fully_deleted = false;
+    while (time_to_delete_more && !bucket_fully_deleted) {
+      time_to_delete_more = delete_bucket(bucket_id, bucket_fully_deleted);
+    }
+    if (!time_to_delete_more) {
+      return false;
+    }
   }
+  return true;
 }
 
-void SFSGC::delete_bucket(const std::string& bucket_id) {
-  // delete the multiparts on the bucket first
-  delete_multiparts(bucket_id);
-  // then delete the objects of the bucket
-  delete_objects(bucket_id);
-  if (max_objects > 0) {
-    sqlite::SQLiteBuckets db_buckets(store->db_conn);
-    db_buckets.remove_bucket(bucket_id);
-    lsfs_dout(this, 30) << "Deleted bucket: " << bucket_id << dendl;
-    --max_objects;
+bool SFSGC::process_deleted_objects(bool& more_objects) {
+  more_objects = true;
+  sqlite::SQLiteVersionedObjects db_versions(store->db_conn);
+  pending_objects_to_delete = db_versions.remove_deleted_versions_transact(
+      max_objects_to_delete_per_iteration
+  );
+  if (pending_objects_to_delete.has_value() &&
+      (*pending_objects_to_delete).empty()) {
+    more_objects = false;
   }
+  return delete_pending_objects_data();
 }
 
-void SFSGC::delete_multiparts(const std::string& bucket_id) {
+bool SFSGC::delete_pending_objects_data() {
+  // delete objects in a loop and check if the max process time has reached
+  // for every object.
+  if (pending_objects_to_delete.has_value()) {
+    for (auto it = (*pending_objects_to_delete).begin();
+         it != (*pending_objects_to_delete).end();) {
+      Object::delete_version_data(
+          store, sqlite::get_uuid((*it)), sqlite::get_version_id((*it))
+      );
+      it = (*pending_objects_to_delete).erase(it);
+      if (process_time_elapsed()) {
+        lsfs_dout(this, 10) << "Exit due to max process time reached." << dendl;
+        return false;  // had no time to delete everything
+      }
+    }
+  }
+  return true;  // all objects were successfully deleted
+}
+
+bool SFSGC::delete_pending_multiparts_data() {
+  if (pending_multiparts_to_delete.has_value()) {
+    // delete multiparts in a loop and check if the max process time has reached
+    // for every part.
+    for (auto it = (*pending_multiparts_to_delete).begin();
+         it != (*pending_multiparts_to_delete).end();) {
+      MultipartPartPath pp(
+          sqlite::get_object_uuid((*it)), sqlite::get_part_num((*it))
+      );
+      auto p = store->get_data_path() / pp.to_path();
+      if (std::filesystem::exists(p)) {
+        std::filesystem::remove(p);
+      }
+      it = (*pending_multiparts_to_delete).erase(it);
+      // check that we didn't exceed the max before keep going
+      if (process_time_elapsed()) {
+        lsfs_dout(this, 10) << "Exit due to max process time reached." << dendl;
+        return false;  // had no time to delete everything
+      }
+    }
+  }
+  return true;  // all objects were successfully deleted
+}
+
+bool SFSGC::abort_bucket_multiparts(const std::string& bucket_id) {
   sqlite::SQLiteMultipart db_mp(store->db_conn);
   int ret = db_mp.abort_multiparts_by_bucket_id(bucket_id);
   ceph_assert(ret >= 0);
 
-  // now we can delete both the multipart uploads' parts, and the uploads themselves.
+  // check that we didn't exceed the max before keep going
+  if (process_time_elapsed()) {
+    lsfs_dout(this, 10) << "Exit due to max process time reached." << dendl;
+    return false;  // had no time to delete everything
+  }
+  return true;
+}
 
-  // grab all multiparts
-  auto mps = db_mp.list_multiparts_by_bucket_id(
-      bucket_id, "", "", "", 10000, nullptr, true
+bool SFSGC::delete_bucket_multiparts(
+    const std::string& bucket_id, bool& all_parts_deleted
+) {
+  sqlite::SQLiteMultipart db_mp(store->db_conn);
+  pending_multiparts_to_delete = db_mp.remove_multiparts_by_bucket_id_transact(
+      bucket_id, max_objects_to_delete_per_iteration
   );
-  if (mps.empty()) {
-    lsfs_dout(this, 30) << "No multiparts to remove for bucket id " << bucket_id
-                        << dendl;
-    return;
-  }
-
-  for (const auto& mp : mps) {
-    // grab all parts destination files
-    auto parts = db_mp.get_parts(mp.upload_id);
-    for (const auto& part : parts) {
-      // delete on-disk part file
-      MultipartPartPath pp(mp.object_uuid, part.part_num);
-      auto p = pp.to_path();
-      if (!std::filesystem::exists(p)) {
-        continue;
-      }
-      std::filesystem::remove(p);
-    }
-
-    // then delete all parts from the db.
-    db_mp.remove_parts(mp.upload_id);
-  }
-
-  // and then delete all multiparts from the db.
-  db_mp.remove_multiparts_by_bucket_id(bucket_id);
+  all_parts_deleted = pending_multiparts_to_delete.has_value() &&
+                      (*pending_multiparts_to_delete).empty();
+  return delete_pending_multiparts_data();
 }
 
-void SFSGC::delete_object(const Object& object) {
-  // delete its versions first
-  delete_versioned_objects(object);
-  if (max_objects > 0) {
-    object.delete_object_metadata(store);
-    object.delete_object_data(store, true);
-    lsfs_dout(this, 30) << "Deleted object: " << object.path.get_uuid()
-                        << dendl;
-    --max_objects;
-  }
+bool SFSGC::delete_bucket(const std::string& bucket_id, bool& bucket_deleted) {
+  sqlite::SQLiteBuckets db_buckets(store->db_conn);
+  // deletes the db bucket (and all it's objects and versions) first in a
+  // transaction.
+  // The call return the objects (and versions) that need to be deleted from
+  // the filesystem
+  pending_objects_to_delete = db_buckets.delete_bucket_transact(
+      bucket_id, max_objects_to_delete_per_iteration, bucket_deleted
+  );
+  return delete_pending_objects_data();
 }
 
-void SFSGC::delete_versioned_object(const Object& object) {
-  object.delete_object_version(store);
-  object.delete_object_data(store, false);
-  lsfs_dout(this, 30) << "Deleted version: (" << object.path.get_uuid() << ","
-                      << object.version_id << ")" << dendl;
-  --max_objects;
+bool SFSGC::process_time_elapsed() const {
+  auto now = ceph_clock_now();
+  return (now.to_msec() - initial_process_time.to_msec()) >
+         static_cast<uint64_t>(max_process_time.count());
 }
 
 SFSGC::GCWorker::GCWorker(
