@@ -21,16 +21,25 @@
 
 namespace sqlite_orm {
 
+template <typename T>
+struct __is_sqlite_blob : std::false_type {};
+
+template <typename T>
+inline constexpr bool is_sqlite_blob = __is_sqlite_blob<T>::value;
+
+template <>
+struct __is_sqlite_blob<rgw::sal::Attrs> : std::true_type {};
+
+template <>
+struct __is_sqlite_blob<ACLOwner> : std::true_type {};
+
 template <class T>
-struct type_printer<
-    T, typename std::enable_if<
-           std::is_same<T, rgw::sal::Attrs>::value, void>::type>
+struct type_printer<T, typename std::enable_if<is_sqlite_blob<T>, void>::type>
     : public blob_printer {};
 
 template <class T>
 struct statement_binder<
-    T, typename std::enable_if<
-           std::is_same<T, rgw::sal::Attrs>::value, void>::type> {
+    T, typename std::enable_if<is_sqlite_blob<T>, void>::type> {
   int bind(sqlite3_stmt* stmt, int index, const T& value) {
     std::vector<char> blobValue;
     rgw::sal::sfs::sqlite::encode_blob(value, blobValue);
@@ -40,15 +49,13 @@ struct statement_binder<
 
 template <class T>
 struct field_printer<
-    T, typename std::enable_if<
-           std::is_same<T, rgw::sal::Attrs>::value, void>::type> {
+    T, typename std::enable_if<is_sqlite_blob<T>, void>::type> {
   std::string operator()(const T& value) const { return "ENCODED BLOB"; }
 };
 
 template <class T>
 struct row_extractor<
-    T, typename std::enable_if<
-           std::is_same<T, rgw::sal::Attrs>::value, void>::type> {
+    T, typename std::enable_if<is_sqlite_blob<T>, void>::type> {
   T extract(sqlite3_stmt* stmt, int columnIndex) {
     auto blob_data = sqlite3_column_blob(stmt, columnIndex);
     auto blob_size = sqlite3_column_bytes(stmt, columnIndex);

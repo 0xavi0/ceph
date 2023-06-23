@@ -13,8 +13,28 @@
  */
 #pragma once
 
+#include "rgw_acl.h"
 #include "rgw_common.h"
 namespace rgw::sal::sfs::sqlite {
+
+/// by default type's decode function is under the ceph namespace
+template <typename T>
+struct __ceph_ns_decode : std::true_type {};
+
+template <typename T>
+inline constexpr bool ceph_ns_decode = __ceph_ns_decode<T>::value;
+
+// specialize the ones that are not under the ceph namespace
+template <>
+struct __ceph_ns_decode<RGWAccessControlPolicy> : std::false_type {};
+template <>
+struct __ceph_ns_decode<RGWQuotaInfo> : std::false_type {};
+template <>
+struct __ceph_ns_decode<RGWObjectLock> : std::false_type {};
+template <>
+struct __ceph_ns_decode<RGWUserCaps> : std::false_type {};
+template <>
+struct __ceph_ns_decode<ACLOwner> : std::false_type {};
 
 template <typename BLOB_HOLDER, typename DEST>
 void decode_blob(const BLOB_HOLDER& blob_holder, DEST& dest) {
@@ -33,7 +53,9 @@ void decode_blob(const char* data, size_t data_size, DEST& dest) {
 }
 
 template <typename ORIGIN, typename BLOB_HOLDER>
-void encode_blob(const ORIGIN& origin, BLOB_HOLDER& dest) {
+typename std::enable_if<ceph_ns_decode<ORIGIN>, void>::type encode_blob(
+    const ORIGIN& origin, BLOB_HOLDER& dest
+) {
   bufferlist buffer;
   ceph::encode(origin, buffer);
   dest.reserve(buffer.length());
@@ -42,38 +64,10 @@ void encode_blob(const ORIGIN& origin, BLOB_HOLDER& dest) {
   );
 }
 
-template <typename BLOB_HOLDER>
-void encode_blob(const RGWAccessControlPolicy& origin, BLOB_HOLDER& dest) {
-  bufferlist buffer;
-  encode(origin, buffer);
-  dest.reserve(buffer.length());
-  std::copy(
-      buffer.c_str(), buffer.c_str() + buffer.length(), std::back_inserter(dest)
-  );
-}
-
-template <typename BLOB_HOLDER>
-void encode_blob(const RGWQuotaInfo& origin, BLOB_HOLDER& dest) {
-  bufferlist buffer;
-  encode(origin, buffer);
-  dest.reserve(buffer.length());
-  std::copy(
-      buffer.c_str(), buffer.c_str() + buffer.length(), std::back_inserter(dest)
-  );
-}
-
-template <typename BLOB_HOLDER>
-void encode_blob(const RGWObjectLock& origin, BLOB_HOLDER& dest) {
-  bufferlist buffer;
-  encode(origin, buffer);
-  dest.reserve(buffer.length());
-  std::copy(
-      buffer.c_str(), buffer.c_str() + buffer.length(), std::back_inserter(dest)
-  );
-}
-
-template <typename BLOB_HOLDER>
-void encode_blob(const RGWUserCaps& origin, BLOB_HOLDER& dest) {
+template <typename ORIGIN, typename BLOB_HOLDER>
+typename std::enable_if<!ceph_ns_decode<ORIGIN>, void>::type encode_blob(
+    const ORIGIN& origin, BLOB_HOLDER& dest
+) {
   bufferlist buffer;
   encode(origin, buffer);
   dest.reserve(buffer.length());
@@ -118,6 +112,13 @@ template <typename SOURCE>
 void assign_db_value(
     const SOURCE& source, std::optional<std::vector<char>>& dest
 ) {
+  std::vector<char> blob_vector;
+  encode_blob(source, blob_vector);
+  dest = blob_vector;
+}
+
+template <typename SOURCE>
+void assign_db_value(const SOURCE& source, std::vector<char>& dest) {
   std::vector<char> blob_vector;
   encode_blob(source, blob_vector);
   dest = blob_vector;
