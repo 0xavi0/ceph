@@ -89,7 +89,7 @@ int SFSAtomicWriter::open() noexcept {
   );
   if (ret < 0) {
     lsfs_dout(dpp, -1) << "error opening file " << object_path << ": "
-                       << cpp_strerror(-fd) << dendl;
+                       << cpp_strerror(errno) << dendl;
     return -ERR_INTERNAL_ERROR;
   }
 
@@ -106,7 +106,7 @@ int SFSAtomicWriter::close() noexcept {
   if (ret < 0) {
     lsfs_dout(dpp, -1) << fmt::format(
                               "failed to fsync fd:{}: {}. continuing.", fd,
-                              cpp_strerror(ret)
+                              cpp_strerror(errno)
                           )
                        << dendl;
   }
@@ -116,7 +116,7 @@ int SFSAtomicWriter::close() noexcept {
   if (ret < 0) {
     lsfs_dout(dpp, -1) << fmt::format(
                               "failed closing fd:{}: {}. continuing.", fd,
-                              cpp_strerror(ret)
+                              cpp_strerror(errno)
                           )
                        << dendl;
     switch (ret) {
@@ -157,7 +157,7 @@ void SFSAtomicWriter::cleanup() noexcept {
         << fmt::format(
                "failed fsyncing dir {} fd:{} for obj file {}: {}. ignoring.",
                object_path.parent_path().string(), dir_fd, object_path.string(),
-               cpp_strerror(ret)
+               cpp_strerror(errno)
            )
         << dendl;
   }
@@ -241,7 +241,7 @@ int SFSAtomicWriter::process(bufferlist&& data, uint64_t offset) {
                               "failing future io. "
                               "will delete partial data on completion. "
                               "returning internal error.",
-                              data.length(), offset, fd, cpp_strerror(write_ret)
+                              data.length(), offset, fd, cpp_strerror(errno)
                           )
                        << dendl;
     io_failed = true;
