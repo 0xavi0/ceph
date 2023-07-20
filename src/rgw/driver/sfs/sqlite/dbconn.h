@@ -20,6 +20,7 @@
 
 #include "buckets/bucket_definitions.h"
 #include "common/ceph_mutex.h"
+#include "common/dout.h"
 #include "lifecycle/lifecycle_definitions.h"
 #include "objects/object_definitions.h"
 #include "sqlite_orm.h"
@@ -202,6 +203,11 @@ inline auto _make_storage(const std::string& path) {
 
 using Storage = decltype(_make_storage(""));
 
+static void sqlite_error_callback(void* ctx, int error_code, const char* msg) {
+  const auto cct = static_cast<CephContext*>(ctx);
+  lderr(cct) << "[SQLITE] (" << error_code << ") " << msg << dendl;
+}
+
 class DBConn {
   Storage storage;
 
@@ -209,6 +215,7 @@ class DBConn {
   sqlite3* sqlite_db;
 
   DBConn(CephContext* cct) : storage(_make_storage(getDBPath(cct))) {
+    sqlite3_config(SQLITE_CONFIG_LOG, &sqlite_error_callback, cct);
     storage.on_open = [this](sqlite3* db) {
       sqlite_db = db;
 
