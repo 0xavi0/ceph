@@ -41,7 +41,6 @@ static int64_t time_point_to_int64(const ceph::real_time& t) {
 }
 
 static ceph::real_time time_point_from_int64(int64_t value) {
-  std::optional<ceph::real_time> ret;
   if (value < 0) {
     // to ensure that we stick to the int64 positive range.
     std::stringstream oss;
