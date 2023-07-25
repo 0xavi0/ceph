@@ -313,6 +313,7 @@ class DBConn {
           "PRAGMA journal_mode=WAL;"
           "PRAGMA synchronous=normal;"
           "PRAGMA temp_store = memory;"
+          "PRAGMA case_sensitive_like=ON;"
           "PRAGMA mmap_size = 30000000000;",
           0, 0, 0
       );
