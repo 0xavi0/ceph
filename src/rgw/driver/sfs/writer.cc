@@ -59,10 +59,25 @@ SFSAtomicWriter::SFSAtomicWriter(
 
 SFSAtomicWriter::~SFSAtomicWriter() {
   if (fd >= 0) {
+    std::filesystem::path proc_fd_path("/proc/self/fd");
+    proc_fd_path /= std::to_string(fd);
+    char linkname[PATH_MAX] = "?";
+    const int ret = ::readlink(proc_fd_path.c_str(), linkname, PATH_MAX - 1);
+    if (ret < 0) {
+      lsfs_dout(dpp, -1)
+          << fmt::format(
+                 "BUG: fd:{} still open. readlink filename:{} failed with {}",
+                 fd, proc_fd_path.string(), cpp_strerror(errno)
+             )
+          << dendl;
+    } else {
+      linkname[ret + 1] = '\0';
+    }
     lsfs_dout(dpp, -1)
         << fmt::format(
-               "BUG: fd:{} still open. closing. (io_failed:{}, object_path:{})",
-               fd, io_failed, object_path.string()
+               "BUG: fd:{} still open. fd resolves to filename:{}. "
+               "(io_failed:{} object_path:{}). closing fd.",
+               fd, linkname, io_failed, object_path.string()
            )
         << dendl;
     close();
