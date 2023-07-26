@@ -12,6 +12,7 @@
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
 #include "rgw/driver/sfs/sqlite/sqlite_users.h"
 #include "rgw/driver/sfs/sqlite/sqlite_versioned_objects.h"
+#include "rgw/driver/sfs/object_state.h"
 #include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
