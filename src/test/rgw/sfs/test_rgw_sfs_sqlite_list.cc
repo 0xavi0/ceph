@@ -107,6 +107,12 @@ class TestSFSList : public ::testing::Test {
     }
   }
 
+  rgw_bucket_dir_entry make_dentry_with_name(const std::string& name) {
+    rgw_bucket_dir_entry e;
+    e.key.name = name;
+    return e;
+  }
+
   SQLiteList make_uut() { return SQLiteList(dbconn); }
 };
 
@@ -240,4 +246,122 @@ TEST_F(TestSFSList, more_avail__max_zero_bucket_not_empty) {
   EXPECT_TRUE(more_avail);
 }
 
+TEST_F(TestSFSList, roll_up_example) {
+  // https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("sample.foo"),
+      make_dentry_with_name("photos/2006/January/sample.jpg"),
+      make_dentry_with_name("photos/2006/February/sample2.jpg"),
+      make_dentry_with_name("photos/2006/February/sample3.jpg"),
+      make_dentry_with_name("photos/2006/February/sample4.jpg")
+  };
+  const auto expected_still_exists = objects[0];
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
 
+  uut.roll_up_common_prefixes("", "/", objects, prefixes, out);
+  EXPECT_EQ(prefixes.size(), 1);
+  EXPECT_EQ(out.size(), 1);
+  EXPECT_EQ(out[0].key.name, expected_still_exists.key.name);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(::testing::Pair("photos/", true))
+  );
+}
+
+TEST_F(TestSFSList, roll_up_empty) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects;
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "/", objects, prefixes, out);
+  EXPECT_EQ(prefixes.size(), 0);
+  EXPECT_EQ(out.size(), 0);
+}
+
+TEST_F(TestSFSList, roll_up_no_such_delim_in_equals_out) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("prefix/aaa"), make_dentry_with_name("prefix/bbb"),
+      make_dentry_with_name("prefix/ccc")};
+  const auto expected_still_exists = objects[0];
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "$", objects, prefixes, out);
+  ASSERT_EQ(prefixes.size(), 0);
+  ASSERT_EQ(out.size(), objects.size());
+  for (size_t i = 0; i < objects.size(); i++) {
+    EXPECT_EQ(objects[i].key.name, out[i].key.name);
+  }
+}
+
+TEST_F(TestSFSList, roll_up_multi_delim_group_by_first) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("prefix/aaa/1"),
+      make_dentry_with_name("prefix/bbb/2"),
+      make_dentry_with_name("prefix/ccc/3")};
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "/", objects, prefixes, out);
+  EXPECT_EQ(prefixes.size(), 1);
+  EXPECT_EQ(out.size(), 0);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(::testing::Pair("prefix/", true))
+  );
+}
+
+TEST_F(TestSFSList, roll_up_multi_prefixes) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("a/1"), make_dentry_with_name("b/2"),
+      make_dentry_with_name("c/3")};
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "/", objects, prefixes, out);
+  EXPECT_EQ(prefixes.size(), 3);
+  EXPECT_EQ(out.size(), 0);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(
+                    ::testing::Pair("a/", true), ::testing::Pair("b/", true),
+                    ::testing::Pair("c/", true)
+                )
+  );
+}
+
+TEST_F(TestSFSList, roll_up_empty_delimiter_prefix_is_copy) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("a"), make_dentry_with_name("b"),
+      make_dentry_with_name("c")};
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "", objects, prefixes, out);
+  ASSERT_EQ(prefixes.size(), 0);
+  ASSERT_EQ(out.size(), objects.size());
+  for (size_t i = 0; i < objects.size(); i++) {
+    EXPECT_EQ(objects[i].key.name, out[i].key.name);
+  }
+}
+
+TEST_F(TestSFSList, roll_up_starts_after_prefix) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("prefix/xxx"), make_dentry_with_name("prefix/yyy/0"),
+      make_dentry_with_name("something/else")};
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("prefix/", "/", objects, prefixes, out);
+  ASSERT_EQ(prefixes.size(), 1);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(
+	  ::testing::Pair("prefix/yyy/", true))
+	      );
+  EXPECT_EQ(out[0].key.name, "prefix/xxx");
+}
