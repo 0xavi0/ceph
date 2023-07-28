@@ -13,9 +13,6 @@ find_package(SQLite3 REQUIRED)
 set(SQLITE_COMPILE_FLAGS "-DSQLITE_THREADSAFE=1")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SQLITE_COMPILE_FLAGS}")
 
-set(CMAKE_INCLUDE_DIR ${CMAKE_INCLUDE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/sqlite")
-include_directories(${CMAKE_INCLUDE_DIR})
-
 set(sfs_srcs
     sqlite/sqlite_users.cc
     sqlite/sqlite_buckets.cc
@@ -43,8 +40,30 @@ set(sfs_srcs
     )
 
 add_library(sfs STATIC ${sfs_srcs})
-target_include_directories(sfs PUBLIC "${CMAKE_SOURCE_DIR}/src/fmt/include")
-target_include_directories(sfs PUBLIC "${CMAKE_SOURCE_DIR}/src/rgw")
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+target_compile_options(sfs PRIVATE
+   -Werror -Wextra
+   -Wunused-function
+   -Wunused-result
+   -Wshadow
+   -Wno-error=unused-parameter)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
+target_compile_options(sfs PRIVATE
+   -Werror -Wextra
+   -Wunused-function
+   -Wunused-result
+   -Wshadow
+   -Wno-error=unused-parameter
+   -Wno-error=unqualified-std-cast-call)
+endif(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+
+# Mark ceph includes system to not see "our" warnings there
+target_include_directories(sfs
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/fmt/include"
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw"
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src"
+    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 set(link_targets spawn)
 
 if(WITH_JAEGER)
@@ -52,4 +71,4 @@ if(WITH_JAEGER)
 endif()
 
 set(CMAKE_LINK_LIBRARIES ${CMAKE_LINK_LIBRARIES} ${link_targets} rgw_common sqlite3 pthread)
-target_link_libraries(sfs PUBLIC ${CMAKE_LINK_LIBRARIES})
+target_link_libraries(sfs PRIVATE ${CMAKE_LINK_LIBRARIES})
