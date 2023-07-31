@@ -17,8 +17,10 @@
 
 #include "common/ceph_context.h"
 #include "common/random_string.h"
+#include "driver/sfs/object_state.h"
 #include "driver/sfs/sqlite/objects/object_definitions.h"
 #include "driver/sfs/sqlite/versioned_object/versioned_object_definitions.h"
+#include "driver/sfs/version_type.h"
 #include "rgw/driver/sfs/sqlite/sqlite_list.h"
 #include "rgw/rgw_perf_counters.h"
 #include "test/rgw/sfs/rgw_sfs_utils.h"
@@ -244,6 +246,23 @@ TEST_F(TestSFSList, more_avail__max_zero_bucket_not_empty) {
   ASSERT_TRUE(uut.objects("testbucket", "", "", 0, results, &more_avail));
   EXPECT_EQ(results.size(), 0);
   EXPECT_TRUE(more_avail);
+}
+
+TEST_F(TestSFSList, do_not_return_objects_with_delete_marker) {
+  const auto uut = make_uut();
+  std::vector<rgw_bucket_dir_entry> results;
+  std::pair<DBObject, DBVersionedObject> oov = add_obj_single_ver();
+  std::pair<DBObject, DBVersionedObject> expected_result = add_obj_single_ver();
+
+  auto del = create_test_versionedobject(oov.first.uuid, "deletemarker");
+  del.object_state = rgw::sal::sfs::ObjectState::COMMITTED;
+  del.version_type = rgw::sal::sfs::VersionType::DELETE_MARKER;
+  SQLiteVersionedObjects vos(dbconn);
+  vos.insert_versioned_object(del);
+
+  ASSERT_TRUE(uut.objects("testbucket", "", "", 1000, results));
+  EXPECT_EQ(results.size(), 1);
+  EXPECT_EQ(results[0].key.name, expected_result.first.name);
 }
 
 TEST_F(TestSFSList, roll_up_example) {

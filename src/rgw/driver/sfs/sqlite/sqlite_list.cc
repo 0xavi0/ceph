@@ -13,6 +13,7 @@
 
 #include <limits>
 
+#include "driver/sfs/version_type.h"
 #include "objects/object_definitions.h"
 #include "rgw_obj_types.h"
 #include "sqlite_orm.h"
@@ -59,7 +60,12 @@ bool SQLiteList::objects(
           greater_than(&DBObject::name, start_after_object_name) and
           like(&DBObject::name, prefix_to_like_expr(prefix))
       ),
-      group_by(&DBObject::name), order_by(&DBObject::name), limit(query_limit)
+      group_by(&DBObject::name),
+      having(is_equal(
+          sqlite_orm::max(&DBVersionedObject::version_type),
+          VersionType::REGULAR
+      )),
+      order_by(&DBObject::name), limit(query_limit)
   );
   ceph_assert(rows.size() <= static_cast<size_t>(query_limit));
   const size_t return_limit = std::min(max, rows.size());
