@@ -365,3 +365,48 @@ TEST_F(TestSFSList, roll_up_starts_after_prefix) {
 	      );
   EXPECT_EQ(out[0].key.name, "prefix/xxx");
 }
+
+TEST_F(TestSFSList, roll_up_a_multichar_delimiters_work) {
+  // https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-prefixes.html
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("sample.foo"),
+      make_dentry_with_name("photosDeLiM2006DeLiMJanuaryDeLiMsample.jpg"),
+      make_dentry_with_name("photosDeLiM2006DeLiMFebruaryDeLiMsample2.jpg"),
+      make_dentry_with_name("photosDeLiM2006DeLiMFebruaryDeLiMsample3.jpg"),
+      make_dentry_with_name("photosDeLiM2006DeLiMFebruaryDeLiMsample4.jpg")
+  };
+  const auto expected_still_exists = objects[0];
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "DeLiM", objects, prefixes, out);
+  EXPECT_EQ(prefixes.size(), 1);
+  EXPECT_EQ(out.size(), 1);
+  EXPECT_EQ(out[0].key.name, expected_still_exists.key.name);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(::testing::Pair("photosDeLiM", true))
+  );
+}
+
+TEST_F(TestSFSList, roll_up_delim_must_follow_prefix) {
+  const auto uut = make_uut();
+  const std::vector<rgw_bucket_dir_entry> objects{
+      make_dentry_with_name("prefix"),
+      make_dentry_with_name("prefixDELIM"),
+      make_dentry_with_name("prefixDELIMsomething"),
+      make_dentry_with_name("prefixSOMETHING")};
+  std::map<std::string, bool> prefixes;
+  std::vector<rgw_bucket_dir_entry> out;
+
+  uut.roll_up_common_prefixes("", "DELIM", objects, prefixes, out);
+  ASSERT_EQ(prefixes.size(), 1);
+  EXPECT_THAT(
+      prefixes, ::testing::ElementsAre(
+	  ::testing::Pair("prefixDELIM", true))
+	      );
+  ASSERT_EQ(out.size(), 2);
+  EXPECT_EQ(out[0].key.name, "prefix");
+  EXPECT_EQ(out[1].key.name, "prefixSOMETHING");
+}
+

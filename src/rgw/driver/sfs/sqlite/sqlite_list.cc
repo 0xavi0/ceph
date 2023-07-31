@@ -88,6 +88,7 @@ void SQLiteList::roll_up_common_prefixes(
     std::vector<rgw_bucket_dir_entry>& out_objects
 ) const {
   const size_t find_after_pos = find_after_prefix.length();
+  const size_t delim_len = delimiter.length();
   if (delimiter.empty()) {
     out_objects = objects;
     return;
@@ -103,9 +104,9 @@ void SQLiteList::roll_up_common_prefixes(
       // Found delim -> add, remember prefix
       auto delim_pos = name.find(delimiter, find_after_pos);
       if (delim_pos != name.npos) {
-        prefix =
-            &out_common_prefixes.emplace(name.substr(0, delim_pos + 1), true)
-                 .first->first;
+        prefix = &out_common_prefixes
+                      .emplace(name.substr(0, delim_pos + delim_len), true)
+                      .first->first;
         continue;
       }
     }
