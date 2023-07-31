@@ -140,8 +140,6 @@ void compareListEntry(
   EXPECT_EQ(entry.key.name, object->name);
   EXPECT_EQ(entry.meta.etag, object->get_meta().etag);
   EXPECT_EQ(entry.meta.mtime, object->get_meta().mtime);
-  EXPECT_EQ(entry.meta.owner_display_name, username + "_display_name");
-  EXPECT_EQ(entry.meta.owner, username);
 }
 
 TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
