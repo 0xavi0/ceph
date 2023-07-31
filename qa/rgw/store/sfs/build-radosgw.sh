@@ -32,8 +32,8 @@ WITH_UBSAN=${WITH_UBSAN:-"OFF"}
 
 NPROC=${NPROC:-$(nproc --ignore=2)}
 
-CC=${CC:-"gcc-11"}
-CXX=${CXX:-"g++-11"}
+CC=${CC:-"gcc-12"}
+CXX=${CXX:-"g++-12"}
 
 CEPH_CMAKE_ARGS=(
   "-GNinja"
