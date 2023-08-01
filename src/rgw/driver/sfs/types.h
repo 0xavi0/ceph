@@ -47,7 +47,6 @@ class Object {
     size_t size;
     std::string etag;
     ceph::real_time mtime;
-    ceph::real_time set_mtime;
     ceph::real_time delete_at;
   };
 

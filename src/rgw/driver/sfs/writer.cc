@@ -22,6 +22,7 @@
 #include <ranges>
 #include <system_error>
 
+#include "common/ceph_time.h"
 #include "driver/sfs/bucket.h"
 #include "driver/sfs/writer.h"
 #include "rgw/driver/sfs/fmt.h"
@@ -281,7 +282,7 @@ int SFSAtomicWriter::process(bufferlist&& data, uint64_t offset) {
 }
 
 int SFSAtomicWriter::complete(
-    size_t accounted_size, const std::string& etag, ceph::real_time* mtime,
+    size_t accounted_size, const std::string& etag, ceph::real_time* out_mtime,
     ceph::real_time set_mtime, std::map<std::string, bufferlist>& attrs,
     ceph::real_time delete_at, const char* if_match, const char* if_nomatch,
     const std::string* user_data, rgw_zone_set* zones_trace, bool* canceled,
@@ -298,6 +299,9 @@ int SFSAtomicWriter::complete(
       << dendl;
 
   const auto now = ceph::real_clock::now();
+  if (real_clock::is_zero(set_mtime)) {
+    set_mtime = now;
+  }
   if (bytes_written != accounted_size) {
     lsfs_dout(dpp, -1)
         << fmt::format(
@@ -337,13 +341,12 @@ int SFSAtomicWriter::complete(
   objref->update_meta(
       {.size = accounted_size,
        .etag = etag,
-       .mtime = now,
-       .set_mtime = set_mtime,
+       .mtime = set_mtime,
        .delete_at = delete_at}
   );
 
-  if (mtime != nullptr) {
-    *mtime = now;
+  if (out_mtime != nullptr) {
+    *out_mtime = now;
   }
   try {
     objref->metadata_finish(store, bucketref->get_info().versioning_enabled());
