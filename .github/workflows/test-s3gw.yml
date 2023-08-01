@@ -35,23 +35,6 @@ jobs:
           path: s3gw
           submodules: false
 
-      - name: Checkout s3tests
-        uses: actions/checkout@v3
-        with:
-          repository: ceph/s3-tests
-          path: s3tests
-
-      - name: Checkout s3gw-status
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ github.repository_owner }}/s3gw-status
-          path: s3gw-status
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions-bot@users.noreply.github.com"
-
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -59,26 +42,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          YQ_GH_URL=https://github.com/mikefarah/yq/releases/download
-          YQ_VERSION=v4.31.1
-          YQ_CHECKSUM=1aef844cbecbbf81036449ea5e7dfcdf19d2d374fab6303fdb8f849d04275d76
-
           sudo apt-get update
           sudo apt-get install -y \
-            bc \
-            wget \
             s3cmd
 
-          # Unfortunately, since yq is only available through snap on Ubuntu and
-          # that doesn't work in docker containers (at least not out of the
-          # box), this abomination is the way to go to install yq.
-          echo "${YQ_CHECKSUM}  yq" >> checksum
-          wget -O yq "${YQ_GH_URL}/${YQ_VERSION}/yq_linux_amd64"
-          sha256sum -c checksum \
-            && sudo mv yq /usr/bin/yq \
-            && sudo chmod +x /usr/bin/yq
-
-          python3 -m pip install -r s3tests/requirements.txt
           python3 -m pip install -r ceph/qa/rgw/store/sfs/tests/requirements.txt
 
       - name: Build Unittests
@@ -90,8 +57,6 @@ jobs:
             --tag s3gw-unittests \
             --target s3gw-unittests \
             .
-
-          docker images
 
       - name: Run Unittests
         run: |
@@ -105,8 +70,6 @@ jobs:
             --file s3gw/Dockerfile \
             --tag s3gw \
             .
-
-          docker images
 
       - name: Run Integration tests
         run: |
@@ -156,24 +119,40 @@ jobs:
 
           docker kill $CONTAINER
 
-      - name: Run S3tests
+      - name: Run S3 Tests
         run: |
           set -x
 
-          # needed for GNU parallel because the version in GH runners is bugged
-          mkdir -p ${HOME}/.parallel
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${GITHUB_WORKSPACE}/s3tr-out:/out \
+            ghcr.io/aquarist-labs/s3tr:latest \
+            run --image s3gw /out/s3tr.json
 
-          export DEBUG=1
-          export CEPH_DIR="${GITHUB_WORKSPACE}/ceph"
-          export OUTPUT_DIR="${GITHUB_WORKSPACE}/s3test-results"
-          export S3GW_CONTAINER="s3gw"
-          export FORCE_CONTAINER=ON
-          export FORCE_DOCKER=ON
-          export \
-            FIXTURES="${GITHUB_WORKSPACE}/ceph/qa/rgw/store/sfs/tests/fixtures"
+      - name: Archive Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: s3tests-results-${{ github.ref_name }}
+          path: s3tr-out/s3tr.json
 
-          export S3TEST_REPO="${GITHUB_WORKSPACE}/s3tests"
-          export S3TEST_CONF="${FIXTURES}/s3tests.conf"
-          export S3TEST_LIST="${FIXTURES}/s3-tests.txt"
-          pushd s3tests
-          ${GITHUB_WORKSPACE}/s3gw/tools/tests/s3tests-runner.sh
+      - name: Analyze Results
+        run: |
+          set -x
+
+          docker run --rm \
+            -v ${GITHUB_WORKSPACE}/s3tr-out:/out \
+            -v ${GITHUB_WORKSPACE}/ceph:/ceph:ro \
+            ghcr.io/aquarist-labs/s3tr:latest \
+            analyze new-successes \
+              --known-good-file \
+                /ceph/qa/rgw/store/sfs/tests/fixtures/s3-tests.txt \
+              /out/s3tr.json
+
+          docker run --rm \
+            -v ${GITHUB_WORKSPACE}/s3tr-out:/out \
+            -v ${GITHUB_WORKSPACE}/ceph:/ceph:ro \
+            ghcr.io/aquarist-labs/s3tr:latest \
+            analyze new-failures \
+              --known-good-file \
+                /ceph/qa/rgw/store/sfs/tests/fixtures/s3-tests.txt \
+              /out/s3tr.json
