@@ -149,11 +149,12 @@ int SFSUser::list_buckets(
 
 int SFSUser::create_bucket(
     const DoutPrefixProvider* dpp, const rgw_bucket& b,
-    const std::string& zonegroup_id, rgw_placement_rule& placement_rule,
+    const std::string& zonegroup_id, rgw_placement_rule& new_placement_rule,
     std::string& swift_ver_location, const RGWQuotaInfo* pquota_info,
-    const RGWAccessControlPolicy& policy, Attrs& attrs, RGWBucketInfo& info,
-    obj_version& ep_objv, bool exclusive, bool obj_lock_enabled, bool* existed,
-    req_info& req_info, std::unique_ptr<Bucket>* bucket_out, optional_yield y
+    const RGWAccessControlPolicy& policy, Attrs& new_attrs,
+    RGWBucketInfo& new_info, obj_version& ep_objv, bool exclusive,
+    bool obj_lock_enabled, bool* existed, req_info& req_info,
+    std::unique_ptr<Bucket>* bucket_out, optional_yield /* y */
 ) {
   ceph_assert(bucket_out != nullptr);
 
@@ -163,9 +164,9 @@ int SFSUser::create_bucket(
   }
   *existed = false;
 
-  placement_rule.name = "default";
-  placement_rule.storage_class = "STANDARD";
-  info.placement_rule = placement_rule;
+  new_placement_rule.name = "default";
+  new_placement_rule.storage_class = "STANDARD";
+  new_info.placement_rule = new_placement_rule;
 
   /*
     Automatically enable versioning for the bucket when
@@ -174,11 +175,11 @@ int SFSUser::create_bucket(
     https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-overview.html#object-lock-bucket-config
   */
   if (obj_lock_enabled)
-    info.flags |= BUCKET_VERSIONED | BUCKET_OBJ_LOCK_ENABLED;
+    new_info.flags |= BUCKET_VERSIONED | BUCKET_OBJ_LOCK_ENABLED;
 
   sfs::BucketRef bucketref = store->bucket_create(
-      b, this->get_info(), zonegroup_id, placement_rule, swift_ver_location,
-      pquota_info, attrs, info
+      b, this->get_info(), zonegroup_id, new_placement_rule, swift_ver_location,
+      pquota_info, new_attrs, new_info
   );
   if (!bucketref) {
     lsfs_dout(dpp, 0) << "error creating bucket '" << b << "'" << dendl;

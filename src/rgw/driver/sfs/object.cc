@@ -381,18 +381,17 @@ std::unique_ptr<MPSerializer> SFSObject::get_serializer(
 }
 
 int SFSObject::transition(
-    Bucket* bucket, const rgw_placement_rule& placement_rule,
-    const real_time& mtime, uint64_t olh_epoch, const DoutPrefixProvider* dpp,
-    optional_yield y
+    Bucket*, const rgw_placement_rule&, const real_time&, uint64_t,
+    const DoutPrefixProvider* dpp, optional_yield
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFSObject::transition_to_cloud(
-    Bucket* bucket, rgw::sal::PlacementTier* tier, rgw_bucket_dir_entry& o,
-    std::set<std::string>& cloud_targets, CephContext* cct, bool update_object,
-    const DoutPrefixProvider* dpp, optional_yield y
+    Bucket*, rgw::sal::PlacementTier*, rgw_bucket_dir_entry&,
+    std::set<std::string>&, CephContext*, bool, const DoutPrefixProvider* dpp,
+    optional_yield
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": not supported" << dendl;
   return -ENOTSUP;

@@ -212,8 +212,8 @@ int SFSMultipartUploadV2::complete(
     return 0;
   }
 
-  auto parts = mpdb.get_parts(upload_id);
-  if (parts.size() != part_etags.size()) {
+  auto current_parts = mpdb.get_parts(upload_id);
+  if (current_parts.size() != part_etags.size()) {
     return -ERR_INVALID_PART;
   }
 
@@ -231,7 +231,7 @@ int SFSMultipartUploadV2::complete(
 
   std::map<int, sqlite::DBMultipartPart> to_complete;
   std::map<int, sqlite::DBMultipartPart> parts_map;
-  for (const auto& p : parts) {
+  for (const auto& p : current_parts) {
     parts_map[p.part_num] = p;
   }
 

@@ -378,20 +378,21 @@ int SFSBucket::merge_and_store_attrs(
 }
 
 std::unique_ptr<MultipartUpload> SFSBucket::get_multipart_upload(
-    const std::string& oid, std::optional<std::string> upload_id,
-    ACLOwner owner, ceph::real_time mtime
+    const std::string& with_oid, std::optional<std::string> with_upload_id,
+    ACLOwner with_owner, ceph::real_time with_mtime
 ) {
-  ldout(store->ceph_context(), 10) << "bucket::" << __func__ << ": oid: " << oid
-                                   << ", upload id: " << upload_id << dendl;
+  ldout(store->ceph_context(), 10)
+      << "bucket::" << __func__ << ": oid: " << with_oid
+      << ", upload id: " << with_upload_id << dendl;
 
-  std::string id = upload_id.value_or("");
+  std::string id = with_upload_id.value_or("");
   if (id.empty()) {
     id = bucket->gen_multipart_upload_id();
   }
   // auto mp = bucket->get_multipart(id, oid, owner, mtime);
   // return std::make_unique<sfs::SFSMultipartUpload>(store, this, bucket, mp);
   return std::make_unique<sfs::SFSMultipartUploadV2>(
-      store, this, bucket, id, oid, owner, mtime
+      store, this, bucket, id, with_oid, with_owner, with_mtime
   );
 }
 
@@ -510,7 +511,7 @@ int SFSBucket::check_bucket_shards(const DoutPrefixProvider* dpp) {
   return -ENOTSUP;
 }
 int SFSBucket::put_info(
-    const DoutPrefixProvider* dpp, bool exclusive, ceph::real_time mtime
+    const DoutPrefixProvider* dpp, bool exclusive, ceph::real_time set_mtime
 ) {
   if (get_info().flags & BUCKET_VERSIONS_SUSPENDED) {
     return -ERR_NOT_IMPLEMENTED;
