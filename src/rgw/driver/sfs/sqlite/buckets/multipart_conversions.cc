@@ -16,6 +16,8 @@
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_definitions.h"
 #include "rgw/driver/sfs/sqlite/conversion_utils.h"
+#include "rgw_acl.h"
+#include "rgw_common.h"
 
 namespace rgw::sal::sfs::sqlite {
 
@@ -42,6 +44,8 @@ DBMultipart get_db_multipart(const DBOPMultipart& mp) {
 }
 
 DBOPMultipart get_rgw_multipart(const DBMultipart& mp) {
+  rgw::sal::Attrs attrs;
+  assign_value(mp.attrs, attrs);
   auto mp_op = DBOPMultipart{
       .id = mp.id,
       .bucket_id = mp.bucket_id,
@@ -51,16 +55,13 @@ DBOPMultipart get_rgw_multipart(const DBMultipart& mp) {
       .object_name = mp.object_name,
       .object_uuid = mp.object_uuid,
       .meta_str = mp.meta_str,
+      .owner_id = ACLOwner(rgw_user(mp.owner_id)),
       .mtime = mp.mtime,
+      .attrs = attrs,
+      .placement =
+          rgw_placement_rule(mp.placement_name, mp.placement_storage_class),
   };
-
-  mp_op.owner_id.get_id().id = mp.owner_id;
   mp_op.owner_id.set_name(mp.owner_display_name);
-  mp_op.placement.name = mp.placement_name;
-  mp_op.placement.storage_class = mp.placement_storage_class;
-
-  assign_value(mp.attrs, mp_op.attrs);
-
   return mp_op;
 }
 
