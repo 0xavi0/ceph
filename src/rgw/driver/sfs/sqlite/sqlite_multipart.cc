@@ -15,6 +15,8 @@
 
 #include <sqlite_orm/sqlite_orm.h>
 
+#include <optional>
+
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_definitions.h"
 #include "rgw/driver/sfs/sqlite/buckets/multipart_conversions.h"
@@ -258,7 +260,13 @@ std::optional<DBMultipartPart> SQLiteMultipart::create_or_reset_part(
       }
     } else {
       part = DBMultipartPart{
-          .upload_id = upload_id, .part_num = part_num, .size = 0};
+          .id = -1 /* ignored by insert */,
+          .upload_id = upload_id,
+          .part_num = part_num,
+          .size = 0,
+          .etag = std::nullopt,
+          .mtime = std::nullopt,
+      };
       try {
         storage.insert(part);
       } catch (const std::system_error& e) {

@@ -97,6 +97,7 @@ int SFSMultipartUploadV2::init(
   auto now = ceph::real_time::clock::now();
 
   sfs::sqlite::DBOPMultipart mpop{
+      .id = -1 /* ignored by insert */,
       .bucket_id = bucket->get_bucket_id(),
       .upload_id = upload_id,
       .state = sfs::MultipartState::INIT,
@@ -465,7 +466,8 @@ int SFSMultipartUploadV2::complete(
   objref->update_meta(
       {.size = accounted_bytes,
        .etag = etag,
-       .mtime = ceph::real_time::clock::now()}
+       .mtime = ceph::real_time::clock::now(),
+       .delete_at = ceph::real_time()}
   );
   try {
     objref->metadata_finish(store, bucketref->get_info().versioning_enabled());
