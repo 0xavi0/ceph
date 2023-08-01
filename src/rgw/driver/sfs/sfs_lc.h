@@ -27,13 +27,13 @@ class LCSFSSerializer : public StoreLCSerializer {
 
  public:
   LCSFSSerializer(
-      std::timed_mutex& m, SFStore* store, const std::string& oid,
-      const std::string& lock_name, const std::string& cookie
+      std::timed_mutex& m, SFStore* /* store */, const std::string& /* oid */,
+      const std::string& /* lock_name */, const std::string& /* cookie */
   )
       : mutex(m) {}
 
   virtual int try_lock(
-      const DoutPrefixProvider* dpp, utime_t dur, optional_yield y
+      const DoutPrefixProvider* /* dpp */, utime_t dur, optional_yield /* y */
   ) override {
     if (mutex.try_lock_for(std::chrono::seconds(dur))) {
       return 0;
