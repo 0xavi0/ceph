@@ -13,12 +13,15 @@
  */
 #include "multipart_conversions.h"
 
-#include "../conversion_utils.h"
 #include "rgw/driver/sfs/multipart_types.h"
+#include "rgw/driver/sfs/sqlite/buckets/bucket_definitions.h"
+#include "rgw/driver/sfs/sqlite/conversion_utils.h"
 
 namespace rgw::sal::sfs::sqlite {
 
 DBMultipart get_db_multipart(const DBOPMultipart& mp) {
+  BLOB attrs_serialized;
+  assign_db_value(mp.attrs, attrs_serialized);
   auto db_mp = DBMultipart{
       .id = mp.id,
       .bucket_id = mp.bucket_id,
@@ -31,12 +34,10 @@ DBMultipart get_db_multipart(const DBOPMultipart& mp) {
       .owner_id = mp.owner_id.get_id().id,
       .owner_display_name = mp.owner_id.get_display_name(),
       .mtime = mp.mtime,
+      .attrs = attrs_serialized,
       .placement_name = mp.placement.name,
       .placement_storage_class = mp.placement.storage_class,
   };
-
-  assign_db_value(mp.attrs, db_mp.attrs);
-
   return db_mp;
 }
 
