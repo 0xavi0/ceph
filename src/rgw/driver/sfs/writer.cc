@@ -285,8 +285,8 @@ int SFSAtomicWriter::complete(
     size_t accounted_size, const std::string& etag, ceph::real_time* out_mtime,
     ceph::real_time set_mtime, std::map<std::string, bufferlist>& attrs,
     ceph::real_time delete_at, const char* if_match, const char* if_nomatch,
-    const std::string* user_data, rgw_zone_set* zones_trace, bool* canceled,
-    optional_yield y
+    const std::string* user_data, rgw_zone_set* /* zones_trace */,
+    bool* canceled, optional_yield /* y */
 ) {
   lsfs_dout(dpp, 10)
       << fmt::format(
@@ -382,7 +382,7 @@ int SFSMultipartWriterV2::close() noexcept {
   return close_fd_for(fd, dpp, get_cls_name(), nullptr);
 }
 
-int SFSMultipartWriterV2::prepare(optional_yield y) {
+int SFSMultipartWriterV2::prepare(optional_yield /* y */) {
   lsfs_dout(dpp, 10) << fmt::format(
                             "upload_id: {}, part: {}", upload_id, part_num
                         )
@@ -537,8 +537,8 @@ int SFSMultipartWriterV2::complete(
     size_t accounted_size, const std::string& etag, ceph::real_time* mtime,
     ceph::real_time set_mtime, std::map<std::string, bufferlist>& attrs,
     ceph::real_time delete_at, const char* if_match, const char* if_nomatch,
-    const std::string* user_data, rgw_zone_set* zones_trace, bool* canceled,
-    optional_yield y
+    const std::string* user_data, rgw_zone_set* /* zones_trace */,
+    bool* canceled, optional_yield /* y */
 ) {
   // NOTE(jecluis): ignored parameters:
   //  * set_mtime
