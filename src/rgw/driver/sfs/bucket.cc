@@ -81,8 +81,11 @@ int SFSBucket::list(
     const DoutPrefixProvider* dpp, ListParams& params, int max,
     ListResults& results, optional_yield y
 ) {
-  lsfs_dout(dpp, 10) << "listing bucket " << get_name() << " max " << max
-                     << " with params " << params << dendl;
+  lsfs_dout(dpp, 10) << fmt::format(
+                            "listing bucket {} {}: max:{} params:", get_name(),
+                            params.list_versions ? "versions" : "objects", max
+                        )
+                     << params << dendl;
   if (max < 0) {
     return -EINVAL;
   }
@@ -126,12 +129,6 @@ int SFSBucket::list(
     return -ENOTSUP;
   }
 
-  if (params.list_versions) {
-    lsfs_dout(dpp, 10) << "using versioning list" << dendl;
-    return list_versions(dpp, params, max, results, y);
-  }
-
-  lsfs_dout(dpp, 10) << "using regular object list" << dendl;
   sfs::sqlite::SQLiteList list(store->db_conn);
   std::string start_with(params.marker.name);
   if (!params.delim.empty()) {
@@ -148,149 +145,80 @@ int SFSBucket::list(
     }
   }
 
-  if (list.objects(
+  // Version listing on unversioned buckets is equivalent to object listing
+  const bool want_list_versions =
+      versioning_enabled() ? params.list_versions : false;
+  const bool listing_succeeded =
+      (want_list_versions && list.versions(
+                                 get_bucket_id(), params.prefix, start_with,
+                                 max, results.objs, &results.is_truncated
+                             )) ||
+      list.objects(
           get_bucket_id(), params.prefix, start_with, max, results.objs,
           &results.is_truncated
-      )) {
-    if (!params.delim.empty()) {
-      std::vector<rgw_bucket_dir_entry> new_results;
-      list.roll_up_common_prefixes(
-          params.prefix, params.delim, results.objs, results.common_prefixes,
-          new_results
       );
-
-      // Is there actually more after the rolled up common prefix? We
-      // can't tell form the original object query. Ask again for
-      // anything after the prefix.
-      if (!results.common_prefixes.empty()) {
-        std::vector<rgw_bucket_dir_entry> objects_after;
-        std::string query = std::prev(results.common_prefixes.end())->first;
-        query.append(
-            sfs::S3_MAX_OBJECT_NAME_BYTES - query.size(),
-            std::numeric_limits<char>::max()
-        );
-        list.objects(get_bucket_id(), params.prefix, query, 1, objects_after);
-        results.is_truncated = objects_after.size() > 0;
-      }
-      lsfs_dout(dpp, 10) << fmt::format(
-                                "common prefix rollup #objs:{} -> #objs:{}, "
-                                "#prefix:{}, more:{}",
-                                results.objs.size(), new_results.size(),
-                                results.common_prefixes.size(),
-                                results.is_truncated
-                            )
-                         << dendl;
-      results.objs = new_results;
-    }
-    if (results.is_truncated) {
-      if (results.common_prefixes.empty()) {
-        const auto& last = results.objs.back();
-        results.next_marker = rgw_obj_key(last.key.name);
-      } else {
-        const std::string& last =
-            std::prev(results.common_prefixes.end())->first;
-        results.next_marker = rgw_obj_key(last);
-      }
-    }
+  if (!listing_succeeded) {
     lsfs_dout(dpp, 10) << fmt::format(
-                              "regular list (prefix:{}, start_after:{}, "
-                              "max:{} delim:{}) successful. #objs_returned:{} "
-                              " #common_pref:{} next:{} have_more:{}",
-                              params.prefix, start_with, max, params.delim,
-                              results.objs.size(),
-                              results.common_prefixes.size(),
-                              results.next_marker, results.is_truncated
+                              "list (prefix:{}, start_after:{}, "
+                              "max:{}) failed.",
+                              params.prefix, start_with, max,
+                              results.objs.size(), results.next_marker,
+                              results.is_truncated
                           )
                        << dendl;
-    return 0;
+    return -ERR_INTERNAL_ERROR;
   }
 
+  if (!params.delim.empty()) {
+    std::vector<rgw_bucket_dir_entry> new_results;
+    list.roll_up_common_prefixes(
+        params.prefix, params.delim, results.objs, results.common_prefixes,
+        new_results
+    );
+
+    // Is there actually more after the rolled up common prefix? We
+    // can't tell form the original object query. Ask again for
+    // anything after the prefix.
+    if (!results.common_prefixes.empty()) {
+      std::vector<rgw_bucket_dir_entry> objects_after;
+      std::string query = std::prev(results.common_prefixes.end())->first;
+      query.append(
+          sfs::S3_MAX_OBJECT_NAME_BYTES - query.size(),
+          std::numeric_limits<char>::max()
+      );
+      list.objects(get_bucket_id(), params.prefix, query, 1, objects_after);
+      results.is_truncated = objects_after.size() > 0;
+    }
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "common prefix rollup #objs:{} -> #objs:{}, "
+                              "#prefix:{}, more:{}",
+                              results.objs.size(), new_results.size(),
+                              results.common_prefixes.size(),
+                              results.is_truncated
+                          )
+                       << dendl;
+
+    results.objs = new_results;
+  }
+  if (results.is_truncated) {
+    if (results.common_prefixes.empty()) {
+      const auto& last = results.objs.back();
+      results.next_marker = rgw_obj_key(last.key.name, last.key.instance);
+    } else {
+      const std::string& last = std::prev(results.common_prefixes.end())->first;
+      results.next_marker = rgw_obj_key(last);
+    }
+  }
   lsfs_dout(dpp, 10) << fmt::format(
-                            "list (prefix:{}, start_after:{}, "
-                            "max:{}) failed.",
-                            params.prefix, start_with, max, results.objs.size(),
+                            "regular list (prefix:{}, start_after:{}, "
+                            "max:{} delim:{}) successful. #objs_returned:{} "
+                            " #common_pref:{} next:{} have_more:{}",
+                            params.prefix, start_with, max, params.delim,
+                            results.objs.size(), results.common_prefixes.size(),
                             results.next_marker, results.is_truncated
                         )
                      << dendl;
-  return -ERR_INTERNAL_ERROR;
-}
-
-int SFSBucket::list_versions(
-    const DoutPrefixProvider* dpp, ListParams& params, int,
-    ListResults& results, optional_yield y
-) {
-  auto use_prefix = !params.prefix.empty();
-  sfs::sqlite::SQLiteVersionedObjects db_versioned_objects(store->db_conn);
-  // get_all returns the last version of all objects that are COMMITTED
-  for (const auto& objref : bucket->get_all()) {
-    if (use_prefix && objref->name.rfind(params.prefix, 0) != 0) continue;
-    lsfs_dout(dpp, 10) << "object: " << objref->name << dendl;
-    // check for delimiter
-    if (check_add_common_prefix(dpp, objref->name, params, 0, results, y)) {
-      continue;
-    }
-    if (get_info().versioning_enabled()) {
-      auto object_versions =
-          db_versioned_objects.get_versioned_objects(objref->path.get_uuid());
-      for (const auto& object_version : object_versions) {
-        if (object_version.object_state !=
-            rgw::sal::sfs::ObjectState::COMMITTED) {
-          continue;
-        }
-        rgw_bucket_dir_entry dirent;
-        dirent.key = cls_rgw_obj_key(objref->name, object_version.version_id);
-        dirent.meta.accounted_size = object_version.size;
-        dirent.meta.mtime = object_version.create_time;
-        dirent.meta.etag = object_version.etag;
-        dirent.flags = rgw_bucket_dir_entry::FLAG_VER;
-        if (objref->version_id == object_version.id) {
-          dirent.flags |= rgw_bucket_dir_entry::FLAG_CURRENT;
-        }
-        if (object_version.version_type ==
-            rgw::sal::sfs::VersionType::DELETE_MARKER) {
-          dirent.flags |= rgw_bucket_dir_entry::FLAG_DELETE_MARKER;
-        }
-        dirent.meta.owner_display_name = bucket->get_owner().display_name;
-        dirent.meta.owner = bucket->get_owner().user_id.id;
-        results.objs.push_back(dirent);
-      }
-    } else {  // non-versioned bucket
-      rgw_bucket_dir_entry dirent;
-      // for non-versioned buckets we don't return the versionId
-      dirent.key = cls_rgw_obj_key(objref->name, "");
-      dirent.meta.accounted_size = objref->get_meta().size;
-      dirent.meta.mtime = objref->get_meta().mtime;
-      dirent.meta.etag = objref->get_meta().etag;
-      dirent.flags = rgw_bucket_dir_entry::FLAG_VER;
-      dirent.flags |= rgw_bucket_dir_entry::FLAG_CURRENT;
-      dirent.meta.owner_display_name = bucket->get_owner().display_name;
-      dirent.meta.owner = bucket->get_owner().user_id.id;
-      results.objs.push_back(dirent);
-    }
-  }
-  lsfs_dout(dpp, 10) << "found " << results.objs.size() << " objects" << dendl;
   return 0;
-}
-
-bool SFSBucket::check_add_common_prefix(
-    const DoutPrefixProvider* dpp, const std::string& object_name,
-    ListParams& params, int max, ListResults& results, optional_yield y
-) {
-  if (!params.delim.empty()) {
-    const int delim_pos = object_name.find(params.delim, params.prefix.size());
-    if (delim_pos >= 0) {
-      /* extract key -with trailing delimiter- for CommonPrefix */
-      const std::string& prefix_key =
-          object_name.substr(0, delim_pos + params.delim.length());
-
-      if (results.common_prefixes.find(prefix_key) ==
-          results.common_prefixes.end()) {
-        results.common_prefixes[prefix_key] = true;
-      }
-      return true;
-    }
-  }
-  return false;
 }
 
 int SFSBucket::remove_bucket(

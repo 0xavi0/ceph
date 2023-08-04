@@ -62,16 +62,6 @@ class SFSBucket : public StoreBucket {
 
   std::unique_ptr<Object> _get_object(sfs::ObjectRef obj);
 
-  int list_versions(
-      const DoutPrefixProvider* dpp, ListParams& params, int,
-      ListResults& results, optional_yield y
-  );
-
-  bool check_add_common_prefix(
-      const DoutPrefixProvider* dpp, const std::string& object_name,
-      ListParams& params, int max, ListResults& results, optional_yield y
-  );
-
  public:
   SFSBucket(SFStore* _store, sfs::BucketRef _bucket);
   SFSBucket& operator=(const SFSBucket&) = delete;
