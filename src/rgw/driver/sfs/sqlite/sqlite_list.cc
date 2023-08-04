@@ -87,6 +87,105 @@ bool SQLiteList::objects(
   return true;
 }
 
+static uint16_t to_dentry_flag(VersionType vt, bool latest) {
+  uint16_t result = rgw_bucket_dir_entry::FLAG_VER;
+  if (latest) {
+    result |= rgw_bucket_dir_entry::FLAG_CURRENT;
+  }
+  if (vt == VersionType::DELETE_MARKER) {
+    result |= rgw_bucket_dir_entry::FLAG_DELETE_MARKER;
+  }
+  return result;
+}
+
+bool SQLiteList::versions(
+    const std::string& bucket_id, const std::string& prefix,
+    const std::string& start_after_object_name, size_t max,
+    std::vector<rgw_bucket_dir_entry>& out, bool* out_more_available
+) const {
+  ceph_assert(!bucket_id.empty());
+
+  // more available logic: request one more than max. if we get that
+  // much set out_more_available, but return only up to max
+  ceph_assert(max < std::numeric_limits<size_t>::max());
+  const size_t query_limit = max + 1;
+
+  auto storage = conn->get_storage();
+  auto rows = storage.select(
+      columns(
+          &DBObject::name, &DBVersionedObject::version_id,
+          &DBVersionedObject::mtime, &DBVersionedObject::etag,
+          &DBVersionedObject::size, &DBVersionedObject::version_type,
+          is_equal(
+              // IsLatest logic
+              // - delete markers are always on top
+              // - Use the id as secondary condition if multiple version
+              // with same max(commit_time) exists
+              sqlite_orm::select(
+                  &DBVersionedObject::id, from<DBVersionedObject>(),
+                  where(
+                      is_equal(
+                          &DBObject::uuid, &DBVersionedObject::object_id
+                      ) and
+                      is_equal(
+                          &DBVersionedObject::object_state,
+                          ObjectState::COMMITTED
+                      )
+                  ),
+                  multi_order_by(
+                      order_by(&DBVersionedObject::version_type).desc(),
+                      order_by(&DBVersionedObject::commit_time).desc(),
+                      order_by(&DBVersionedObject::id).desc()
+                  ),
+                  limit(1)
+              ),
+              &DBVersionedObject::id
+          )
+      ),
+      inner_join<DBVersionedObject>(
+          on(is_equal(&DBObject::uuid, &DBVersionedObject::object_id))
+      ),
+      where(
+          is_equal(&DBVersionedObject::object_state, ObjectState::COMMITTED) and
+          is_equal(&DBObject::bucket_id, bucket_id) and
+          greater_than(&DBObject::name, start_after_object_name) and
+          like(&DBObject::name, prefix_to_like_expr(prefix))
+      ),
+      // Sort:
+      // names a-Z
+      // first versions, then delete markers
+      // newest to oldest version
+      multi_order_by(
+          order_by(&DBObject::name).asc(),
+          order_by(&DBVersionedObject::version_type).asc(),
+          order_by(&DBVersionedObject::commit_time).desc(),
+          order_by(&DBVersionedObject::id).desc()
+      ),
+      limit(query_limit)
+  );
+
+  ceph_assert(rows.size() <= static_cast<size_t>(query_limit));
+  const size_t return_limit = std::min(max, rows.size());
+  out.reserve(return_limit);
+  for (size_t i = 0; i < return_limit; i++) {
+    const auto& row = rows[i];
+    rgw_bucket_dir_entry e;
+    e.key.name = std::get<0>(row);
+    e.key.instance = std::get<1>(row);
+    e.meta.mtime = std::get<2>(row);
+    e.meta.etag = std::get<3>(row);
+    e.meta.size = std::get<4>(row);
+    e.meta.accounted_size = e.meta.size;
+    // TODO(https://github.com/aquarist-labs/s3gw/issues/644) set owner
+    e.flags = to_dentry_flag(std::get<5>(row), std::get<6>(row));
+    out.emplace_back(e);
+  }
+  if (out_more_available) {
+    *out_more_available = rows.size() == query_limit;
+  }
+  return true;
+}
+
 void SQLiteList::roll_up_common_prefixes(
     const std::string& find_after_prefix, const std::string& delimiter,
     const std::vector<rgw_bucket_dir_entry>& objects,

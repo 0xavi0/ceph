@@ -33,6 +33,16 @@ class SQLiteList {
       std::vector<rgw_bucket_dir_entry>& out, bool* out_more_available = nullptr
   ) const;
 
+  /// versions lists committed objects versions in bucket, with
+  /// optional prefix search and pagination (max,
+  /// start_after_object_name). Optionally sets out_more_available to
+  /// indicate callers to call again with pagination.
+  bool versions(
+      const std::string& bucket_id, const std::string& prefix,
+      const std::string& start_after_object_name, size_t max,
+      std::vector<rgw_bucket_dir_entry>& out, bool* out_more_available = nullptr
+  ) const;
+
   // roll_up_common_prefixes performs S3 common prefix compression to
   // objects and common_prefixes.
   //
