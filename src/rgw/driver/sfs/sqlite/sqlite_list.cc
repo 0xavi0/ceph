@@ -78,7 +78,6 @@ bool SQLiteList::objects(
     e.meta.etag = std::get<2>(row);
     e.meta.size = static_cast<uint64_t>(*std::get<3>(row));
     e.meta.accounted_size = e.meta.size;
-    // TODO(https://github.com/aquarist-labs/s3gw/issues/644) set owner
     out.emplace_back(e);
   }
   if (out_more_available) {
@@ -176,7 +175,6 @@ bool SQLiteList::versions(
     e.meta.etag = std::get<3>(row);
     e.meta.size = std::get<4>(row);
     e.meta.accounted_size = e.meta.size;
-    // TODO(https://github.com/aquarist-labs/s3gw/issues/644) set owner
     e.flags = to_dentry_flag(std::get<5>(row), std::get<6>(row));
     out.emplace_back(e);
   }

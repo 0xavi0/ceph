@@ -13,6 +13,8 @@
  */
 #include "bucket.h"
 
+#include <driver/sfs/sqlite/sqlite_buckets.h>
+
 #include <cerrno>
 #include <fstream>
 #include <limits>
@@ -213,15 +215,31 @@ int SFSBucket::list(
       results.next_marker = rgw_obj_key(last);
     }
   }
-  lsfs_dout(dpp, 10) << fmt::format(
-                            "regular list (prefix:{}, start_after:{}, "
-                            "max:{} delim:{}) successful. #objs_returned:{} "
-                            " #common_pref:{} next:{} have_more:{}",
-                            params.prefix, start_with, max, params.delim,
-                            results.objs.size(), results.common_prefixes.size(),
-                            results.next_marker, results.is_truncated
-                        )
-                     << dendl;
+
+  // Since we don't support per-object ownership (a bucket ACL
+  // feature), apply the bucket owner to every object.
+  // See: https://docs.aws.amazon.com/AmazonS3/latest/userguide/about-object-ownership.html
+  // TODO(irq0) make conditional when SAL gains support for that
+  sfs::sqlite::SQLiteBuckets buckets(store->db_conn);
+  const auto maybe_owner = buckets.get_owner(get_bucket_id());
+  if (maybe_owner.has_value()) {
+    for (auto& obj : results.objs) {
+      obj.meta.owner = maybe_owner->first;
+      obj.meta.owner_display_name = maybe_owner->second;
+    }
+  }
+
+  lsfs_dout(dpp, 10)
+      << fmt::format(
+             "success (prefix:{}, start_after:{}, "
+             "max:{} delim:{}). #objs_returned:{} "
+             "?owner:{} ?versionlist:{} #common_pref:{} next:{} have_more:{}",
+             params.prefix, start_with, max, params.delim, results.objs.size(),
+             maybe_owner.has_value(), want_list_versions,
+             results.common_prefixes.size(), results.next_marker,
+             results.is_truncated
+         )
+      << dendl;
   return 0;
 }
 
