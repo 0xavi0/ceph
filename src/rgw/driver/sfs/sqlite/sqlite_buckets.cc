@@ -13,6 +13,9 @@
  */
 #include "sqlite_buckets.h"
 
+#include <driver/sfs/sqlite/buckets/bucket_definitions.h>
+#include <driver/sfs/sqlite/users/users_definitions.h>
+
 using namespace sqlite_orm;
 
 namespace rgw::sal::sfs::sqlite {
@@ -40,6 +43,22 @@ std::optional<DBOPBucketInfo> SQLiteBuckets::get_bucket(
     ret_value = get_rgw_bucket(*bucket);
   }
   return ret_value;
+}
+
+std::optional<std::pair<std::string, std::string>> SQLiteBuckets::get_owner(
+    const std::string& bucket_id
+) const {
+  auto storage = conn->get_storage();
+  const auto rows = storage.select(
+      columns(&DBUser::user_id, &DBUser::display_name),
+      inner_join<DBUser>(on(is_equal(&DBBucket::owner_id, &DBUser::user_id))),
+      where(is_equal(&DBBucket::bucket_id, bucket_id))
+  );
+  if (rows.size() == 0) {
+    return std::nullopt;
+  }
+  const auto row = rows[0];
+  return std::make_pair(std::get<0>(row), std::get<1>(row).value_or(""));
 }
 
 std::vector<DBOPBucketInfo> SQLiteBuckets::get_bucket_by_name(

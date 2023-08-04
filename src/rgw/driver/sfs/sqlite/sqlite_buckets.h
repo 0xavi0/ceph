@@ -31,6 +31,11 @@ class SQLiteBuckets {
   std::optional<DBOPBucketInfo> get_bucket(const std::string& bucket_id) const;
   std::vector<DBOPBucketInfo> get_bucket_by_name(const std::string& bucket_name
   ) const;
+  /// get_onwer returns bucket ownership information as a pair of
+  /// (user id, display name) or nullopt
+  std::optional<std::pair<std::string, std::string>> get_owner(
+      const std::string& bucket_id
+  ) const;
 
   void store_bucket(const DBOPBucketInfo& bucket) const;
   void remove_bucket(const std::string& bucket_id) const;
