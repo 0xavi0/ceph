@@ -88,7 +88,7 @@ class TestSFSSQLiteVersionedObjects : public ::testing::Test {
     DBObject object;
     object.uuid.parse(object_id.c_str());
     object.bucket_id = bucketname;
-    object.name = "test_name";
+    object.name = object_id;
     objects.store_object(object);
   }
 };
@@ -957,10 +957,10 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
   object.commit_time = ceph::real_clock::now();
   EXPECT_EQ(3, db_versioned_objects->insert_versioned_object(object));
 
-  // try to get version (TEST_BUCKET, "test_name", "test_version_id_2")
+  // try to get version (TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_2")
   // corresponding to the second version
   auto version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "test_version_id_2"
+      TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_2"
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_2", version->version_id);
@@ -968,7 +968,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // don't pass any version. Should return the last one
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", ""
+      TEST_BUCKET, TEST_OBJECT_ID, ""
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_3", version->version_id);
@@ -976,7 +976,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // pass a non existing version_id
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "this_version_does_not_exist"
+      TEST_BUCKET, TEST_OBJECT_ID, "this_version_does_not_exist"
   );
   ASSERT_FALSE(version.has_value());
 
@@ -998,16 +998,16 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // don't pass any version. Should return the last one
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", ""
+      TEST_BUCKET, TEST_OBJECT_ID, ""
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_3", version->version_id);
   EXPECT_EQ(3, version->id);
 
-  // try to get a deleted version (TEST_BUCKET, "test_name", "test_version_id_5")
+  // try to get a deleted version (TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_5")
   // corresponding to the second version
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "test_version_id_5"
+      TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_5"
   );
   // should not return that object
   // (it is deleted waiting for the garbage collector)
@@ -1015,7 +1015,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // still return valid version
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "test_version_id_3"
+      TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_3"
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_3", version->version_id);
@@ -1032,7 +1032,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // still return valid version for 1st object
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "test_version_id_3"
+      TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_3"
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_3", version->version_id);
@@ -1040,7 +1040,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // and also valid for the object in the second bucket
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET_2, "test_name", "test_version_id_6"
+      TEST_BUCKET_2, TEST_OBJECT_ID_3, "test_version_id_6"
   );
   ASSERT_TRUE(version.has_value());
   EXPECT_EQ("test_version_id_6", version->version_id);
@@ -1048,7 +1048,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 
   // but version 6 is not on first bucket
   version = db_versioned_objects->get_committed_versioned_object(
-      TEST_BUCKET, "test_name", "test_version_id_6"
+      TEST_BUCKET, TEST_OBJECT_ID, "test_version_id_6"
   );
   ASSERT_FALSE(version.has_value());
 }
