@@ -484,17 +484,10 @@ SQLiteVersionedObjects::create_new_versioned_object_transact(
     auto transaction = storage.transaction_guard();
     auto objs = storage.select(
         columns(&DBObject::uuid),
-        inner_join<DBVersionedObject>(
-            on(is_equal(&DBObject::uuid, &DBVersionedObject::object_id))
-        ),
         where(
-            is_not_equal(
-                &DBVersionedObject::object_state, ObjectState::DELETED
-            ) and
             is_equal(&DBObject::bucket_id, bucket_id) and
             is_equal(&DBObject::name, object_name)
-        ),
-        group_by(&DBObject::uuid)
+        )
     );
     // should return none or 1
     // TODO revisit this ceph_assert after error handling is defined
