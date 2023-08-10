@@ -148,15 +148,19 @@ int SFSBucket::list(
   // Version listing on unversioned buckets is equivalent to object listing
   const bool want_list_versions =
       versioning_enabled() ? params.list_versions : false;
-  const bool listing_succeeded =
-      (want_list_versions && list.versions(
-                                 get_bucket_id(), params.prefix, start_with,
-                                 max, results.objs, &results.is_truncated
-                             )) ||
-      list.objects(
+  const bool listing_succeeded = [&]() {
+    if (want_list_versions) {
+      return list.versions(
           get_bucket_id(), params.prefix, start_with, max, results.objs,
           &results.is_truncated
       );
+    } else {
+      return list.objects(
+          get_bucket_id(), params.prefix, start_with, max, results.objs,
+          &results.is_truncated
+      );
+    }
+  }();
   if (!listing_succeeded) {
     lsfs_dout(dpp, 10) << fmt::format(
                               "list (prefix:{}, start_after:{}, "
@@ -177,7 +181,7 @@ int SFSBucket::list(
     );
 
     // Is there actually more after the rolled up common prefix? We
-    // can't tell form the original object query. Ask again for
+    // can't tell from the original object query. Ask again for
     // anything after the prefix.
     if (!results.common_prefixes.empty()) {
       std::vector<rgw_bucket_dir_entry> objects_after;
