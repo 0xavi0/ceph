@@ -32,9 +32,9 @@
 namespace rgw::sal::sfs::sqlite {
 
 /// current db version.
-constexpr int SFS_METADATA_VERSION = 3;
+constexpr int SFS_METADATA_VERSION = 4;
 /// minimum required version to upgrade db.
-constexpr int SFS_METADATA_MIN_VERSION = 1;
+constexpr int SFS_METADATA_MIN_VERSION = 4;
 
 constexpr std::string_view SCHEMA_DB_NAME = "s3gw.db";
 
