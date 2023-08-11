@@ -55,13 +55,11 @@ void SFSBucket::write_meta(const DoutPrefixProvider* dpp) {
 void SFSBucket::Meta::dump(ceph::Formatter* f) const {
   f->open_object_section("info");
   info.dump(f);
-  f->close_section();  // info
-                       // encode_json("multipart", multipart, f);
+  f->close_section();
 }
 
 void SFSBucket::Meta::decode_json(JSONObj* obj) {
   JSONDecoder::decode_json("info", info, obj);
-  // JSONDecoder::decode_json("multipart", multipart, obj);
 }
 
 std::unique_ptr<Object> SFSBucket::_get_object(sfs::ObjectRef obj) {
