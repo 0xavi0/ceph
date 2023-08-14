@@ -60,7 +60,7 @@ bool SQLiteList::objects(
           greater_than(&DBObject::name, start_after_object_name) and
           like(&DBObject::name, prefix_to_like_expr(prefix))
       ),
-      group_by(&DBObject::name),
+      group_by(&DBVersionedObject::object_id),
       having(is_equal(
           sqlite_orm::max(&DBVersionedObject::version_type),
           VersionType::REGULAR
