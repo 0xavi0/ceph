@@ -335,7 +335,7 @@ int SFSMultipartUploadV2::complete(
   size_t accounted_bytes = 0;
 
   for (const auto& [part_num, part] : to_complete) {
-    MultipartPartPath partpath(mp->object_uuid, part_num);
+    MultipartPartPath partpath(mp->object_uuid, part.id);
     std::filesystem::path path = store->get_data_path() / partpath.to_path();
 
     ceph_assert(std::filesystem::exists(path));
