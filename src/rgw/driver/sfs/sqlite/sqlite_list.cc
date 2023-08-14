@@ -152,11 +152,11 @@ bool SQLiteList::versions(
       ),
       // Sort:
       // names a-Z
-      // first versions, then delete markers
+      // first delete markers, then versions - (See: LC CurrentExpiration)
       // newest to oldest version
       multi_order_by(
           order_by(&DBObject::name).asc(),
-          order_by(&DBVersionedObject::version_type).asc(),
+          order_by(&DBVersionedObject::version_type).desc(),
           order_by(&DBVersionedObject::commit_time).desc(),
           order_by(&DBVersionedObject::id).desc()
       ),

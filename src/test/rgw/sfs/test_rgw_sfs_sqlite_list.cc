@@ -320,9 +320,9 @@ TEST_F(TestSFSList, versions__returns_versions_and_delete_markers) {
   ASSERT_EQ(results.size(), 2);
 
   EXPECT_TRUE(results[0].flags & rgw_bucket_dir_entry::FLAG_VER);
-  EXPECT_TRUE(results[0].is_valid());
+  EXPECT_TRUE(results[0].is_delete_marker());
   EXPECT_TRUE(results[1].flags & rgw_bucket_dir_entry::FLAG_VER);
-  EXPECT_TRUE(results[1].is_delete_marker());
+  EXPECT_TRUE(results[1].is_valid());
 }
 
 TEST_F(TestSFSList, versions__correctly_sorts_and_marks_latest_version) {
@@ -465,10 +465,10 @@ TEST_F(TestSFSList, versions__delete_marker_latest) {
 
   ASSERT_TRUE(uut.versions("testbucket", "", "", 1000, results));
   ASSERT_EQ(results.size(), 2);
-  EXPECT_FALSE(results[0].is_delete_marker());
-  EXPECT_FALSE(results[0].is_current());
-  EXPECT_TRUE(results[1].is_delete_marker());
-  EXPECT_TRUE(results[1].is_current());
+  EXPECT_TRUE(results[0].is_delete_marker());
+  EXPECT_TRUE(results[0].is_current());
+  EXPECT_FALSE(results[1].is_delete_marker());
+  EXPECT_FALSE(results[1].is_current());
 }
 
 TEST_F(TestSFSList, roll_up_example) {
