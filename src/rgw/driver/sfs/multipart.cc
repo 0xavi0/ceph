@@ -13,6 +13,7 @@
  */
 #include "multipart.h"
 
+#include <common/random_string.h>
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -176,7 +177,7 @@ int SFSMultipartUploadV2::abort(
 }
 
 int SFSMultipartUploadV2::complete(
-    const DoutPrefixProvider* dpp, optional_yield /*y*/, CephContext* /*cct*/,
+    const DoutPrefixProvider* dpp, optional_yield /*y*/, CephContext* cct,
     std::map<int, std::string>& part_etags,
     std::list<rgw_obj_index_key>& /*remove_objs*/, uint64_t& accounted_size,
     bool& /*compressed*/, RGWCompressionInfo& /*cs_info*/, off_t& /*ofs*/,
@@ -319,9 +320,22 @@ int SFSMultipartUploadV2::complete(
   res = mpdb.mark_aggregating(upload_id);
   ceph_assert(res == true);
 
-  std::filesystem::path objpath =
-      store->get_data_path() / UUIDPath(mp->object_uuid).to_path();
-
+  std::string mp_combine_fn = gen_rand_alphanumeric_plain(cct, 16);
+  mp_combine_fn.append(".m");
+  std::filesystem::path objpath = store->get_data_path() /
+                                  UUIDPath(mp->object_uuid).to_path() /
+                                  mp_combine_fn;
+  std::error_code ec;
+  std::filesystem::create_directories(objpath.parent_path(), ec);
+  if (ec) {
+    lsfs_dout(dpp, -1)
+        << fmt::format(
+               "failed to create directories for temp mp object {}: {}",
+               objpath, ec.message()
+           )
+        << dendl;
+    return -ERR_INTERNAL_ERROR;
+  }
   int objfd = ::open(objpath.c_str(), O_WRONLY | O_BINARY | O_CREAT, 0600);
   if (objfd < 0) {
     lsfs_dout(dpp, -1) << fmt::format(
@@ -440,7 +454,6 @@ int SFSMultipartUploadV2::complete(
   ) << fmt::format("moving final object from {} to {}", objpath, destpath)
     << dendl;
 
-  std::error_code ec;
   std::filesystem::create_directories(destpath.parent_path(), ec);
   if (ec) {
     lsfs_dout(dpp, -1)
