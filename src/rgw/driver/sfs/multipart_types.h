@@ -18,8 +18,6 @@
 #include "rgw/driver/sfs/uuid_path.h"
 #include "rgw/rgw_common.h"
 
-#define MULTIPART_PART_SUFFIX_LEN (6 + 1)  // '-' + len(10000) + '\0'
-
 namespace rgw::sal::sfs {
 
 using TOPNSPC::crypto::MD5;
@@ -40,9 +38,10 @@ class MultipartPartPath : public UUIDPath {
 
  public:
   MultipartPartPath(const uuid_d& uuid, int32_t num) : UUIDPath(uuid) {
-    char suffix[MULTIPART_PART_SUFFIX_LEN];
-    std::snprintf(suffix, sizeof(suffix), "-%d", num);
-    partpath = UUIDPath::to_path().concat(suffix);
+    ceph_assert(num >= 0);
+    std::string filename = std::to_string(num);
+    filename.append(".p");
+    partpath = UUIDPath::to_path() / filename;
   }
 
   virtual std::filesystem::path to_path() const override { return partpath; }
