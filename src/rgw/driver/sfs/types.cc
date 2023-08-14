@@ -164,7 +164,9 @@ Object* Object::try_fetch_from_database(
 }
 
 std::filesystem::path Object::get_storage_path() const {
-  return path.to_path() / std::to_string(version_id);
+  std::string filename = std::to_string(version_id);
+  filename.append(".v");
+  return path.to_path() / filename;
 }
 
 const Object::Meta Object::get_meta() const {
