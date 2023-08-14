@@ -214,7 +214,7 @@ std::optional<DBMultipartPart> SQLiteMultipart::create_or_reset_part(
     const std::string& upload_id, uint32_t part_num, std::string* error_str
 ) const {
   auto storage = conn->get_storage();
-  std::optional<DBMultipartPart> entry;
+  std::optional<DBMultipartPart> entry = std::nullopt;
 
   storage.transaction([&]() mutable {
     auto cnt = storage.count<DBMultipart>(where(
@@ -271,7 +271,7 @@ std::optional<DBMultipartPart> SQLiteMultipart::create_or_reset_part(
           .mtime = std::nullopt,
       };
       try {
-        storage.insert(part);
+        part.id = storage.insert(part);
       } catch (const std::system_error& e) {
         if (error_str) {
           *error_str = e.what();
