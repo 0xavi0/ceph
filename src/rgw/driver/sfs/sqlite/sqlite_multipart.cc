@@ -461,7 +461,7 @@ SQLiteMultipart::remove_multiparts_by_bucket_id_transact(
     // get first the list of parts to be deleted up to max_items
     ret_parts = storage.select(
         columns(
-            &DBMultipart::upload_id, &DBMultipart::object_uuid,
+            &DBMultipart::upload_id, &DBMultipart::path_uuid,
             &DBMultipartPart::id
         ),
         inner_join<DBMultipart>(

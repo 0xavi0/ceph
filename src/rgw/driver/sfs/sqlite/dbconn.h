@@ -218,7 +218,7 @@ inline auto _make_storage(const std::string& path) {
               "state_change_time", &DBMultipart::state_change_time
           ),
           sqlite_orm::make_column("object_name", &DBMultipart::object_name),
-          sqlite_orm::make_column("object_uuid", &DBMultipart::object_uuid),
+          sqlite_orm::make_column("path_uuid", &DBMultipart::path_uuid),
           sqlite_orm::make_column("meta_str", &DBMultipart::meta_str),
           sqlite_orm::make_column("owner_id", &DBMultipart::owner_id),
           sqlite_orm::make_column(
@@ -234,7 +234,7 @@ inline auto _make_storage(const std::string& path) {
           ),
           sqlite_orm::unique(&DBMultipart::upload_id),
           sqlite_orm::unique(&DBMultipart::bucket_id, &DBMultipart::upload_id),
-          sqlite_orm::unique(&DBMultipart::object_uuid),
+          sqlite_orm::unique(&DBMultipart::path_uuid),
           sqlite_orm::foreign_key(&DBMultipart::bucket_id)
               .references(&DBBucket::bucket_id)
       ),

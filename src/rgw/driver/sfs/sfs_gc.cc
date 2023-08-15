@@ -176,7 +176,7 @@ bool SFSGC::delete_pending_multiparts_data() {
     for (auto it = (*pending_multiparts_to_delete).begin();
          it != (*pending_multiparts_to_delete).end();) {
       MultipartPartPath pp(
-          sqlite::get_object_uuid((*it)), sqlite::get_part_id((*it))
+          sqlite::get_path_uuid((*it)), sqlite::get_part_id((*it))
       );
       auto p = store->get_data_path() / pp.to_path();
       if (std::filesystem::exists(p)) {

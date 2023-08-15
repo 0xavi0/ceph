@@ -104,7 +104,7 @@ int SFSMultipartUploadV2::init(
       .state = sfs::MultipartState::INIT,
       .state_change_time = now,
       .object_name = oid,
-      .object_uuid = uuid,
+      .path_uuid = uuid,
       .meta_str = meta_str,
       .owner_id = acl_owner,
       .mtime = now,
@@ -323,7 +323,7 @@ int SFSMultipartUploadV2::complete(
   std::string mp_combine_fn = gen_rand_alphanumeric_plain(cct, 16);
   mp_combine_fn.append(".m");
   std::filesystem::path objpath = store->get_data_path() /
-                                  UUIDPath(mp->object_uuid).to_path() /
+                                  UUIDPath(mp->path_uuid).to_path() /
                                   mp_combine_fn;
   std::error_code ec;
   std::filesystem::create_directories(objpath.parent_path(), ec);
@@ -349,7 +349,7 @@ int SFSMultipartUploadV2::complete(
   size_t accounted_bytes = 0;
 
   for (const auto& [part_num, part] : to_complete) {
-    MultipartPartPath partpath(mp->object_uuid, part.id);
+    MultipartPartPath partpath(mp->path_uuid, part.id);
     std::filesystem::path path = store->get_data_path() / partpath.to_path();
 
     ceph_assert(std::filesystem::exists(path));

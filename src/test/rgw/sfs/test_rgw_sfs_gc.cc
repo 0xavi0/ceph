@@ -143,7 +143,7 @@ class TestSFSGC : public ::testing::Test {
     mp.object_name = upload_id;
     uuid_d uuid;
     uuid.generate_random();
-    mp.object_uuid = uuid;
+    mp.path_uuid = uuid;
     db_multiparts.insert(mp);
     return mp;
   }
@@ -345,25 +345,25 @@ TEST_F(TestSFSGC, TestDeletedBucketsWithMultiparts) {
   auto multipart1 =
       createMultipart("test_bucket_1", "multipart1", store->db_conn);
   auto part1_1 = createMultipartPart(
-      "multipart1", multipart1.object_uuid, 1, store->db_conn
+      "multipart1", multipart1.path_uuid, 1, store->db_conn
   );
   auto part1_2 = createMultipartPart(
-      "multipart1", multipart1.object_uuid, 2, store->db_conn
+      "multipart1", multipart1.path_uuid, 2, store->db_conn
   );
   auto part1_3 = createMultipartPart(
-      "multipart1", multipart1.object_uuid, 3, store->db_conn
+      "multipart1", multipart1.path_uuid, 3, store->db_conn
   );
   auto part1_4 = createMultipartPart(
-      "multipart1", multipart1.object_uuid, 4, store->db_conn
+      "multipart1", multipart1.path_uuid, 4, store->db_conn
   );
 
   auto multipart2 =
       createMultipart("test_bucket_2", "multipart2", store->db_conn);
   auto part2_1 = createMultipartPart(
-      "multipart2", multipart2.object_uuid, 1, store->db_conn
+      "multipart2", multipart2.path_uuid, 1, store->db_conn
   );
   auto part2_2 = createMultipartPart(
-      "multipart2", multipart2.object_uuid, 2, store->db_conn
+      "multipart2", multipart2.path_uuid, 2, store->db_conn
   );
 
   // we should have 11 files (5 version + 6 parts)

@@ -29,7 +29,7 @@ struct DBMultipart {
   MultipartState state;
   ceph::real_time state_change_time;
   std::string object_name;
-  uuid_d object_uuid;
+  uuid_d path_uuid;
   std::string meta_str;
 
   std::string owner_id;
@@ -58,7 +58,7 @@ struct DBOPMultipart {
   MultipartState state;
   ceph::real_time state_change_time;
   std::string object_name;
-  uuid_d object_uuid;
+  uuid_d path_uuid;
   std::string meta_str;
 
   ACLOwner owner_id;
@@ -68,7 +68,7 @@ struct DBOPMultipart {
 };
 
 using DBDeletedMultipartItem = std::tuple<
-    decltype(DBMultipart::upload_id), decltype(DBMultipart::object_uuid),
+    decltype(DBMultipart::upload_id), decltype(DBMultipart::path_uuid),
     decltype(DBMultipartPart::id)>;
 
 using DBDeletedMultipartItems = std::vector<DBDeletedMultipartItem>;
@@ -80,7 +80,7 @@ inline decltype(DBMultipart::upload_id) get_upload_id(
   return std::get<0>(item);
 }
 
-inline decltype(DBMultipart::object_uuid) get_object_uuid(
+inline decltype(DBMultipart::path_uuid) get_path_uuid(
     const DBDeletedMultipartItem& item
 ) {
   return std::get<1>(item);
