@@ -13,9 +13,13 @@
  */
 #include "bucket.h"
 
+#include <common/strtol.h>
+#include <driver/sfs/multipart_types.h>
 #include <driver/sfs/sqlite/buckets/multipart_definitions.h>
+#include <driver/sfs/sqlite/dbconn.h>
 #include <driver/sfs/sqlite/sqlite_buckets.h>
 #include <driver/sfs/sqlite/sqlite_multipart.h>
+#include <fmt/core.h>
 
 #include <cerrno>
 #include <fstream>
@@ -427,6 +431,27 @@ int SFSBucket::merge_and_store_attrs(
   return 0;
 }
 
+// try_resolve_mp_from_oid tries to parse an integer id from oid to
+// find an MP upload, returning object_name and upload_id
+static bool try_resolve_mp_from_oid(
+    sfs::sqlite::DBConnRef dbconn, const std::string& oid,
+    std::string& out_object_name, std::string& out_upload_id
+) {
+  sfs::sqlite::SQLiteMultipart mpdb(dbconn);
+  std::string err;
+  const int id = strict_strtol(oid, 10, &err);
+  if ((id == 0) && !err.empty()) {
+    return false;
+  }
+  std::optional<sfs::sqlite::DBOPMultipart> maybe_mp = mpdb.get_multipart(id);
+  if (!maybe_mp.has_value()) {
+    return false;
+  }
+  out_object_name = maybe_mp->object_name;
+  out_upload_id = maybe_mp->upload_id;
+  return true;
+}
+
 std::unique_ptr<MultipartUpload> SFSBucket::get_multipart_upload(
     const std::string& with_oid, std::optional<std::string> with_upload_id,
     ACLOwner with_owner, ceph::real_time with_mtime
@@ -435,14 +460,33 @@ std::unique_ptr<MultipartUpload> SFSBucket::get_multipart_upload(
       << "bucket::" << __func__ << ": oid: " << with_oid
       << ", upload id: " << with_upload_id << dendl;
 
-  std::string id = with_upload_id.value_or("");
-  if (id.empty()) {
-    id = bucket->gen_multipart_upload_id();
+  std::string next_oid(with_oid);
+  std::string next_upload_id;
+  // LC calls this to mp.abort() the resulting MultipartUpload
+  // `with_oid` from bucket->list(ns=multipart) and `with_upload_id`
+  // == nullopt. To _uniquily_ identify MPs we interpret `oid` as an
+  // ID into the MP table and resolve that to a upload id here.
+  if (!with_upload_id.has_value() &&
+      try_resolve_mp_from_oid(
+          store->db_conn, with_oid, next_oid, next_upload_id
+      )) {
+    ldout(store->ceph_context(), 20)
+        << fmt::format(
+               "called without upload_id. resolved oid {} to MP oid:{} "
+               "upload:{}",
+               with_oid, next_oid, next_upload_id
+           )
+        << dendl;
+  } else {
+    next_upload_id = with_upload_id.value_or("");
   }
-  // auto mp = bucket->get_multipart(id, oid, owner, mtime);
-  // return std::make_unique<sfs::SFSMultipartUpload>(store, this, bucket, mp);
+  if (next_upload_id.empty()) {
+    next_upload_id = bucket->gen_multipart_upload_id();
+  }
+  ceph_assert(!next_upload_id.empty());
+  ceph_assert(!next_oid.empty());
   return std::make_unique<sfs::SFSMultipartUploadV2>(
-      store, this, bucket, id, with_oid, with_owner, with_mtime
+      store, this, bucket, next_upload_id, next_oid, with_owner, with_mtime
   );
 }
 
