@@ -89,24 +89,11 @@ std::unique_ptr<Object> SFSBucket::get_object(const rgw_obj_key& key) {
   }
 }
 
-/**
- * List objects in this bucket.
- */
-int SFSBucket::list(
-    const DoutPrefixProvider* dpp, ListParams& params, int max,
-    ListResults& results, optional_yield /*y*/
-) {
-  lsfs_dout(dpp, 10) << fmt::format(
-                            "listing bucket {} {}: max:{} params:", get_name(),
-                            params.list_versions ? "versions" : "objects", max
-                        )
-                     << params << dendl;
+int SFSBucket::verify_list_params(
+    const DoutPrefixProvider* dpp, const ListParams& params, int max
+) const {
   if (max < 0) {
     return -EINVAL;
-  }
-  if (max == 0) {
-    results.is_truncated = false;
-    return 0;
   }
   if (params.allow_unordered) {
     // allow unordered is a ceph extension intended to improve performance
@@ -127,13 +114,18 @@ int SFSBucket::list(
                       << get_name() << dendl;
     return -ENOTSUP;
   }
-  if (!params.ns.empty()) {
-    // TODO(https://github.com/aquarist-labs/s3gw/issues/642)
+  if (!params.ns.empty() && params.ns != RGW_OBJ_NS_MULTIPART) {
     return -ENOTSUP;
   }
-  if (params.access_list_filter) {
-    // TODO(https://github.com/aquarist-labs/s3gw/issues/642)
-    return -ENOTSUP;
+  if (params.ns == RGW_OBJ_NS_MULTIPART) {
+    if (params.list_versions) {
+      return -EINVAL;
+    }
+  }
+  if (params.ns.empty()) {
+    if (params.access_list_filter) {
+      return -ENOTSUP;
+    }
   }
   if (params.force_check_filter) {
     // RADOS extension. forced filter by func()
@@ -142,6 +134,30 @@ int SFSBucket::list(
   if (params.shard_id != RGW_NO_SHARD) {
     // we don't support sharding
     return -ENOTSUP;
+  }
+  return 0;
+}
+
+/**
+ * List objects in this bucket.
+ */
+int SFSBucket::list(
+    const DoutPrefixProvider* dpp, ListParams& params, int max,
+    ListResults& results, optional_yield /* y */
+) {
+  lsfs_dout(dpp, 10) << fmt::format(
+                            "listing bucket {} {}: max:{} params:", get_name(),
+                            params.list_versions ? "versions" : "objects", max
+                        )
+                     << params << dendl;
+
+  const int list_params_ok = verify_list_params(dpp, params, max);
+  if (list_params_ok < 0) {
+    return list_params_ok;
+  }
+  if (max == 0) {
+    results.is_truncated = false;
+    return 0;
   }
 
   sfs::sqlite::SQLiteList list(store->db_conn);

@@ -51,6 +51,11 @@ class SFSBucket : public StoreBucket {
 
   std::unique_ptr<Object> _get_object(sfs::ObjectRef obj);
 
+  /// Verify params passed to list()
+  int verify_list_params(
+      const DoutPrefixProvider* dpp, const ListParams& params, int max
+  ) const;
+
  public:
   SFSBucket(SFStore* _store, sfs::BucketRef _bucket);
   SFSBucket& operator=(const SFSBucket&) = delete;
@@ -188,7 +193,7 @@ class SFSBucket : public StoreBucket {
       const DoutPrefixProvider* dpp, const std::string& oid,
       const std::string& meta
   );
-  inline std::string get_cls_name() { return "bucket"; }
+  inline std::string get_cls_name() const { return "bucket"; }
 
   SFStore& get_store() { return *store; }
 
