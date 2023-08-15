@@ -146,6 +146,19 @@ std::optional<DBOPMultipart> SQLiteMultipart::get_multipart(
   return mp;
 }
 
+std::optional<DBOPMultipart> SQLiteMultipart::get_multipart(int id) const {
+  ceph_assert(id >= 0);
+  auto storage = conn->get_storage();
+  auto entries =
+      storage.get_all<DBMultipart>(where(is_equal(&DBMultipart::id, id)));
+  ceph_assert(entries.size() <= 1);  // primary key
+  std::optional<DBOPMultipart> mp;
+  if (entries.size() == 1) {
+    mp = get_rgw_multipart(entries[0]);
+  }
+  return mp;
+}
+
 uint SQLiteMultipart::insert(const DBOPMultipart& mp) const {
   auto storage = conn->get_storage();
   auto db_mp = get_db_multipart(mp);

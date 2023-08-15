@@ -94,6 +94,14 @@ class SQLiteMultipart {
   ) const;
 
   /**
+   * @brief Get the converted Multipart entry from the database.
+   *
+   * @param id The Multipart Upload's ID to obtain.
+   * @return Multipart Upload entry, or `nullopt` if not found.
+   */
+  std::optional<DBOPMultipart> get_multipart(int id) const;
+
+  /**
    * @brief Insert a new Multipart Upload entry into the database.
    *
    * @param mp The Multipart Upload to insert.
