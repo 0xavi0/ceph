@@ -13,11 +13,14 @@
  */
 #include "bucket.h"
 
+#include <driver/sfs/sqlite/buckets/multipart_definitions.h>
 #include <driver/sfs/sqlite/sqlite_buckets.h>
+#include <driver/sfs/sqlite/sqlite_multipart.h>
 
 #include <cerrno>
 #include <fstream>
 #include <limits>
+#include <string>
 
 #include "common/Formatter.h"
 #include "driver/sfs/multipart.h"
@@ -145,11 +148,13 @@ int SFSBucket::list(
     const DoutPrefixProvider* dpp, ListParams& params, int max,
     ListResults& results, optional_yield /* y */
 ) {
-  lsfs_dout(dpp, 10) << fmt::format(
-                            "listing bucket {} {}: max:{} params:", get_name(),
-                            params.list_versions ? "versions" : "objects", max
-                        )
-                     << params << dendl;
+  lsfs_dout(dpp, 10)
+      << fmt::format(
+             "listing bucket {} {} {}: max:{} params:", get_name(),
+             params.ns == RGW_OBJ_NS_MULTIPART ? "multipart" : "",
+             params.list_versions ? "versions" : "objects", max
+         )
+      << params << dendl;
 
   const int list_params_ok = verify_list_params(dpp, params, max);
   if (list_params_ok < 0) {
@@ -157,6 +162,35 @@ int SFSBucket::list(
   }
   if (max == 0) {
     results.is_truncated = false;
+    return 0;
+  }
+
+  // LC: Like list_multiparts, but returns (1) identifier + (2) mtime to
+  // (1) find the entry via get_multipart_upload, (2) LC expire
+  if (params.ns == RGW_OBJ_NS_MULTIPART) {
+    // Ignore params.access_list_filter. A filter for multipart "meta"
+    // objects that SFS doesn't have.
+    sfs::sqlite::SQLiteMultipart multipart(store->db_conn);
+    std::vector<sfs::sqlite::DBOPMultipart> multiparts =
+        multipart.list_multiparts_by_bucket_id(
+            get_bucket_id(), params.prefix, params.marker.name, "", max,
+            &results.is_truncated, false
+        );
+    for (const auto& mp : multiparts) {
+      rgw_bucket_dir_entry e;
+      e.key.name = std::to_string(mp.id);
+      e.meta.mtime = mp.mtime;
+      results.objs.emplace_back(e);
+    }
+    lsfs_dout(dpp, 10) << fmt::format(
+                              "success (prefix:{}, start_after:{}, "
+                              "max:{}). #objs_returned:{} "
+                              "next:{} have_more:{}",
+                              params.prefix, params.marker.name, max,
+                              params.delim, results.objs.size(),
+                              results.next_marker, results.is_truncated
+                          )
+                       << dendl;
     return 0;
   }
 

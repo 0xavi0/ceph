@@ -6,7 +6,9 @@
 #include <filesystem>
 #include <memory>
 
+#include "common/async/yield_context.h"
 #include "common/ceph_context.h"
+#include "driver/sfs/sqlite/sqlite_multipart.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
 #include "rgw/driver/sfs/sqlite/dbconn.h"
 #include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
@@ -675,7 +677,9 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   params.prefix = "";
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0
+  );
 
   std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
       expected_objects;
@@ -725,7 +729,10 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   params.prefix = "ob";
   rgw::sal::Bucket::ListResults results_ob_prefix;
   EXPECT_EQ(
-      bucket_from_store->list(&ndp, params, 1000, results_ob_prefix, null_yield), 0
+      bucket_from_store->list(
+          &ndp, params, 1000, results_ob_prefix, null_yield
+      ),
+      0
   );
 
   expected_objects.clear();
@@ -749,7 +756,8 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   rgw::sal::Bucket::ListResults results_versions;
 
   EXPECT_EQ(
-      bucket_from_store->list(&ndp, params, 1000, results_versions, null_yield), 0
+      bucket_from_store->list(&ndp, params, 1000, results_versions, null_yield),
+      0
   );
   // we'll find 4 objects with 2 versions each (8 entries)
   EXPECT_EQ(8, results_versions.objs.size());
@@ -899,7 +907,9 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   params.delim = "";
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0
+  );
 
   // we expect to get all the objects
   std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
@@ -929,7 +939,9 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   rgw::sal::Bucket::ListResults results_delimiter_i;
 
   EXPECT_EQ(
-      bucket_from_store->list(&ndp, params, 1000, results_delimiter_i, null_yield),
+      bucket_from_store->list(
+          &ndp, params, 1000, results_delimiter_i, null_yield
+      ),
       0
   );
 
@@ -1117,7 +1129,9 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   params.list_versions = true;
   rgw::sal::Bucket::ListResults results;
 
-  EXPECT_EQ(bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0);
+  EXPECT_EQ(
+      bucket_from_store->list(&ndp, params, 1000, results, null_yield), 0
+  );
 
   // we expect to get all the objects
   std::map<std::string, std::shared_ptr<rgw::sal::sfs::Object>>
@@ -1148,7 +1162,9 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   rgw::sal::Bucket::ListResults results_delimiter_i;
 
   EXPECT_EQ(
-      bucket_from_store->list(&ndp, params, 1000, results_delimiter_i, null_yield),
+      bucket_from_store->list(
+          &ndp, params, 1000, results_delimiter_i, null_yield
+      ),
       0
   );
 
@@ -1335,4 +1351,95 @@ TEST_F(TestSFSBucket, UserCreateBucketObjectLockEnabled) {
   EXPECT_EQ(
       bucket_from_create->get_info().flags, bucket_from_store->get_info().flags
   );
+}
+
+TEST_F(TestSFSBucket, ListNamespaceMultipartsBasics) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+
+  NoDoutPrefix ndp(ceph_context.get(), 1);
+  RGWEnv env;
+  env.init(ceph_context.get());
+
+  createUser("usr_id", store->db_conn);
+
+  rgw_user arg_user("", "usr_id", "");
+  auto user = store->get_user(arg_user);
+
+  rgw_bucket arg_bucket("t_id", "b_name", "");
+  rgw_placement_rule arg_pl_rule("default", "STANDARD");
+  std::string arg_swift_ver_location;
+  RGWQuotaInfo arg_quota_info;
+  RGWAccessControlPolicy arg_aclp = get_aclp_default();
+  rgw::sal::Attrs arg_attrs;
+  {
+    bufferlist acl_bl;
+    arg_aclp.encode(acl_bl);
+    arg_attrs[RGW_ATTR_ACL] = acl_bl;
+  }
+
+  RGWBucketInfo arg_info = get_binfo();
+  obj_version arg_objv;
+  bool existed = false;
+  req_info arg_req_info(ceph_context.get(), &env);
+
+  std::unique_ptr<rgw::sal::Bucket> bucket_from_create;
+
+  EXPECT_EQ(
+      user->create_bucket(
+          &ndp,                    //dpp
+          arg_bucket,              //b
+          "zg1",                   //zonegroup_id
+          arg_pl_rule,             //placement_rule
+          arg_swift_ver_location,  //swift_ver_location
+          &arg_quota_info,         //pquota_info
+          arg_aclp,                //policy
+          arg_attrs,               //attrs
+          arg_info,                //info
+          arg_objv,                //ep_objv
+          false,                   //exclusive
+          false,                   //obj_lock_enabled
+          &existed,                //existed
+          arg_req_info,            //req_info
+          &bucket_from_create,     //bucket
+          null_yield               //optional_yield
+      ),
+      0
+  );
+
+  std::unique_ptr<rgw::sal::Bucket> uut;
+
+  EXPECT_EQ(
+      store->get_bucket(&ndp, user.get(), arg_info.bucket, &uut, null_yield), 0
+  );
+  uuid_d uuid;
+  uuid.generate_random();
+  auto now = ceph::real_time::clock::now();
+
+  SQLiteMultipart multipart(store->db_conn);
+  DBOPMultipart mpop{
+      .id = -1 /* ignored by insert */,
+      .bucket_id = uut->get_bucket_id(),
+      .upload_id = "upload",
+      .state = rgw::sal::sfs::MultipartState::INIT,
+      .state_change_time = now,
+      .object_name = "object_name",
+      .path_uuid = uuid,
+      .meta_str = "metastr",
+      .mtime = now};
+  int id = multipart.insert(mpop);
+  ASSERT_GE(id, 0);
+
+  rgw::sal::Bucket::ListParams params;
+  rgw::sal::Bucket::ListResults results;
+  params.list_versions = false;
+  params.allow_unordered = true;
+  params.ns = RGW_OBJ_NS_MULTIPART;
+
+  ASSERT_EQ(uut->list(&ndp, params, 1000, results, null_yield), 0);
+
+  ASSERT_EQ(results.objs.size(), 1);
+  EXPECT_EQ(results.objs[0].key.name, std::to_string(id));
+  EXPECT_EQ(results.objs[0].meta.mtime, now);
 }
