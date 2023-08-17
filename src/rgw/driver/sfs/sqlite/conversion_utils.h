@@ -13,8 +13,10 @@
  */
 #pragma once
 
+#include "rgw/driver/sfs/sqlite/sqlite_orm.h"
 #include "rgw_acl.h"
 #include "rgw_common.h"
+
 namespace rgw::sal::sfs::sqlite {
 
 /// by default type's decode function is under the ceph namespace
@@ -122,6 +124,24 @@ void assign_db_value(const SOURCE& source, std::vector<char>& dest) {
   std::vector<char> blob_vector;
   encode_blob(source, blob_vector);
   dest = blob_vector;
+}
+
+template <typename COL>
+sqlite_orm::internal::like_t<COL, std::basic_string<char>, const char*>
+prefix_to_like(COL col, const std::string& prefix) {
+  std::string like_expr;
+  like_expr.reserve(prefix.length() + 10);
+  for (const char c : prefix) {
+    switch (c) {
+      case '%':
+      case '_':
+        like_expr.push_back('\a');
+      default:
+        like_expr.push_back(c);
+    }
+  }
+  like_expr.push_back('%');
+  return sqlite_orm::like(col, like_expr, "\a");
 }
 
 }  // namespace rgw::sal::sfs::sqlite
