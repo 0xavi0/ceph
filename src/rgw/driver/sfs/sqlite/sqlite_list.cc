@@ -13,23 +13,17 @@
 
 #include <limits>
 
-#include "driver/sfs/version_type.h"
-#include "objects/object_definitions.h"
+#include "rgw/driver/sfs/sqlite/conversion_utils.h"
+#include "rgw/driver/sfs/sqlite/objects/object_definitions.h"
+#include "rgw/driver/sfs/sqlite/versioned_object/versioned_object_definitions.h"
+#include "rgw/driver/sfs/version_type.h"
 #include "rgw_obj_types.h"
 #include "sqlite_orm.h"
-#include "versioned_object/versioned_object_definitions.h"
 
 using namespace sqlite_orm;
 namespace rgw::sal::sfs::sqlite {
 
 SQLiteList::SQLiteList(DBConnRef _conn) : conn(_conn) {}
-
-static std::string prefix_to_like_expr(const std::string& prefix) {
-  std::string result(prefix);
-  // TODO(https://github.com/aquarist-labs/s3gw/issues/643) implement me
-  result.append("%");
-  return result;
-}
 
 bool SQLiteList::objects(
     const std::string& bucket_id, const std::string& prefix,
@@ -58,7 +52,7 @@ bool SQLiteList::objects(
           is_equal(&DBVersionedObject::object_state, ObjectState::COMMITTED) and
           is_equal(&DBObject::bucket_id, bucket_id) and
           greater_than(&DBObject::name, start_after_object_name) and
-          like(&DBObject::name, prefix_to_like_expr(prefix))
+          prefix_to_like(&DBObject::name, prefix)
       ),
       group_by(&DBVersionedObject::object_id),
       having(is_equal(
@@ -148,7 +142,7 @@ bool SQLiteList::versions(
           is_equal(&DBVersionedObject::object_state, ObjectState::COMMITTED) and
           is_equal(&DBObject::bucket_id, bucket_id) and
           greater_than(&DBObject::name, start_after_object_name) and
-          like(&DBObject::name, prefix_to_like_expr(prefix))
+          prefix_to_like(&DBObject::name, prefix)
       ),
       // Sort:
       // names a-Z

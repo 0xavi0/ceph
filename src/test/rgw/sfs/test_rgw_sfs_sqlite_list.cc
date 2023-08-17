@@ -271,6 +271,22 @@ TEST_P(TestSFSListObjectsAndVersions, more_avail__max_zero_bucket_not_empty) {
   EXPECT_TRUE(more_avail);
 }
 
+TEST_P(TestSFSListObjectsAndVersions, wildcard_in_prefix_do_not_match) {
+  std::vector<rgw_bucket_dir_entry> results;
+  add_obj_single_ver("$");
+  ASSERT_TRUE(uut_list("testbucket", "%", "", 1000, results));
+  ASSERT_EQ(results.size(), 0);
+}
+
+TEST_P(TestSFSListObjectsAndVersions, prefix_matches_dont_interprete_wildcards) {
+  std::vector<rgw_bucket_dir_entry> results;
+  add_obj_single_ver("___$");
+  add_obj_single_ver("$__$");
+  ASSERT_TRUE(uut_list("testbucket", "___$", "", 1000, results));
+  ASSERT_EQ(results.size(), 1);
+  EXPECT_TRUE(results[0].key.name.starts_with("___$"));
+}
+
 INSTANTIATE_TEST_SUITE_P(
     ObjectsVersions, TestSFSListObjectsAndVersions,
     testing::Values("objects", "versions"),

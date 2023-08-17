@@ -20,6 +20,7 @@
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_definitions.h"
 #include "rgw/driver/sfs/sqlite/buckets/multipart_conversions.h"
+#include "rgw/driver/sfs/sqlite/conversion_utils.h"
 
 using namespace sqlite_orm;
 
@@ -69,7 +70,7 @@ std::vector<DBOPMultipart> SQLiteMultipart::list_multiparts_by_bucket_id(
       where(
           is_equal(&DBMultipart::bucket_id, bucket_id) and cond and
           greater_or_equal(&DBMultipart::meta_str, marker) and
-          like(&DBMultipart::object_name, fmt::format("{}%", prefix))
+          prefix_to_like(&DBMultipart::object_name, prefix)
       ),
       order_by(&DBMultipart::meta_str), limit(max_uploads + 1)
   );
