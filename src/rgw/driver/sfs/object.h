@@ -50,6 +50,7 @@ class SFSObject : public StoreObject {
     SFSObject* source;
     sfs::ObjectRef objref;
     std::filesystem::path objdata;
+    int handle_conditionals(const DoutPrefixProvider* dpp) const;
 
    public:
     SFSReadOp(SFSObject* _source);

@@ -13,6 +13,9 @@
  */
 #include "driver/sfs/object.h"
 
+#include <fmt/chrono.h>
+#include <fmt/format.h>
+
 #include "driver/sfs/multipart.h"
 #include "driver/sfs/sqlite/sqlite_versioned_objects.h"
 #include "driver/sfs/types.h"
@@ -39,6 +42,74 @@ SFSObject::SFSReadOp::SFSReadOp(SFSObject* _source) : source(_source) {
   objref = source->get_object_ref();
 }
 
+// Handle conditional GET params. If-Match, If-None-Match,
+// If-Modified-Since, If-UnModified-Since. Return 0 if we are neutral.
+// Otherwise return S3/HTTP error code.
+int SFSObject::SFSReadOp::handle_conditionals(const DoutPrefixProvider* dpp
+) const {
+  if (!params.if_match && !params.if_nomatch && !params.mod_ptr &&
+      !params.unmod_ptr) {
+    return 0;
+  }
+  const std::string etag = objref->get_meta().etag;
+  const auto mtime = objref->get_meta().mtime;
+  int result = 0;
+
+  if (params.if_match) {
+    const std::string match = rgw_string_unquote(params.if_match);
+    result = (etag == match) ? 0 : -ERR_PRECONDITION_FAILED;
+    ldpp_dout(dpp, 10) << fmt::format(
+                              "If-Match: etag={} vs. ifmatch={}: {}", etag,
+                              match, result
+                          )
+                       << dendl;
+  }
+  if (params.if_nomatch) {
+    const std::string match = rgw_string_unquote(params.if_nomatch);
+    result = (etag == match) ? -ERR_NOT_MODIFIED : 0;
+    ldpp_dout(dpp, 10) << fmt::format(
+                              "If-None-Match: etag={} vs. ifmatch={}: {}", etag,
+                              match, result
+                          )
+                       << dendl;
+  }
+  // RFC 7232 3.3. A recipient MUST ignore If-Modified-Since if the
+  // request contains an If-None-Match header field
+  if (params.mod_ptr && !params.if_nomatch) {
+    result = (mtime > *params.mod_ptr) ? 0 : -ERR_NOT_MODIFIED;
+    ldpp_dout(dpp, 10)
+        << fmt::format(
+               "If-Modified-Since: mtime={:%Y-%m-%d %H:%M:%S} vs. "
+               "if_time={:%Y-%m-%d %H:%M:%S}: {}",
+               fmt::gmtime(ceph::real_clock::to_time_t(mtime)),
+               fmt::gmtime(ceph::real_clock::to_time_t(*params.mod_ptr)), result
+           )
+        << dendl;
+  }
+  // RFC 7232 3.4. A recipient MUST ignore If-Unmodified-Since if the
+  // request contains an If-Match header field
+  if (params.unmod_ptr && !params.if_match) {
+    result = (mtime < *params.unmod_ptr) ? 0 : -ERR_PRECONDITION_FAILED;
+    ldpp_dout(dpp, 10)
+        << fmt::format(
+               "If-UnModified-Since: mtime={:%Y-%m-%d %H:%M:%S} vs. "
+               "if_time={:%Y-%m-%d %H:%M:%S}: {}",
+               fmt::gmtime(ceph::real_clock::to_time_t(mtime)),
+               fmt::gmtime(ceph::real_clock::to_time_t(*params.unmod_ptr)),
+               result
+           )
+        << dendl;
+  }
+  ldpp_dout(dpp, 10)
+      << fmt::format(
+             "Conditional GET (Match/NoneMatch/Mod/UnMod) ({}, {}): {}",
+             params.if_match != nullptr, params.if_nomatch != nullptr,
+             params.mod_ptr != nullptr, params.unmod_ptr != nullptr, result
+         )
+      << dendl;
+  return result;
+}
+
 int SFSObject::SFSReadOp::prepare(
     optional_yield /*y*/, const DoutPrefixProvider* dpp
 ) {
@@ -54,14 +125,21 @@ int SFSObject::SFSReadOp::prepare(
     return -ENOENT;
   }
 
-  lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
-                     << ", obj: " << source->get_name()
-                     << ", size: " << source->get_obj_size()
-                     << ", versionId: " << source->get_instance() << dendl;
+  lsfs_dout(dpp, 10)
+      << fmt::format(
+             "bucket:{} obj:{} size:{} versionid:{} "
+             "conditionals:(ifmatch:{} ifnomatch:{} ifmod:{} ifunmod:{})",
+             source->bucket->get_name(), source->get_name(),
+             source->get_obj_size(), source->get_instance(),
+             fmt::ptr(params.if_match), fmt::ptr(params.if_nomatch),
+             fmt::ptr(params.mod_ptr), fmt::ptr(params.unmod_ptr)
+         )
+      << dendl;
+
   if (params.lastmod) {
     *params.lastmod = source->get_mtime();
   }
-  return 0;
+  return handle_conditionals(dpp);
 }
 
 int SFSObject::SFSReadOp::get_attr(
