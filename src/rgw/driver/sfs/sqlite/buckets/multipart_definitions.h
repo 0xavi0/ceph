@@ -69,7 +69,7 @@ struct DBOPMultipart {
 
 using DBDeletedMultipartItem = std::tuple<
     decltype(DBMultipart::upload_id), decltype(DBMultipart::object_uuid),
-    decltype(DBMultipartPart::part_num)>;
+    decltype(DBMultipartPart::id)>;
 
 using DBDeletedMultipartItems = std::vector<DBDeletedMultipartItem>;
 
@@ -86,7 +86,7 @@ inline decltype(DBMultipart::object_uuid) get_object_uuid(
   return std::get<1>(item);
 }
 
-inline decltype(DBMultipartPart::part_num) get_part_num(
+inline decltype(DBMultipartPart::part_num) get_part_id(
     const DBDeletedMultipartItem& item
 ) {
   return std::get<2>(item);

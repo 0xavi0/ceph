@@ -462,7 +462,7 @@ SQLiteMultipart::remove_multiparts_by_bucket_id_transact(
     ret_parts = storage.select(
         columns(
             &DBMultipart::upload_id, &DBMultipart::object_uuid,
-            &DBMultipartPart::part_num
+            &DBMultipartPart::id
         ),
         inner_join<DBMultipart>(
             on(is_equal(&DBMultipart::upload_id, &DBMultipartPart::upload_id))

@@ -101,8 +101,8 @@ class TestSFSGC : public ::testing::Test {
     ofs.close();
   }
 
-  void storeRandomPart(const uuid_d& uuid, int part_num) {
-    rgw::sal::sfs::MultipartPartPath pp(uuid, part_num);
+  void storeRandomPart(const uuid_d& uuid, int id) {
+    rgw::sal::sfs::MultipartPartPath pp(uuid, id);
     auto part_path = getTestDir() / pp.to_path();
     storeRandomFile(part_path);
   }
@@ -158,8 +158,8 @@ class TestSFSGC : public ::testing::Test {
     mp.upload_id = upload_id;
     mp.part_num = part_num;
     mp.size = 123;
-    storage.insert(mp);
-    storeRandomPart(uuid, part_num);
+    const int id = storage.insert(mp);
+    storeRandomPart(uuid, id);
     return mp;
   }
 
