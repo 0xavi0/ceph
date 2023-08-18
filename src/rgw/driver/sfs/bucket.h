@@ -163,23 +163,24 @@ class SFSBucket : public StoreBucket {
 
   // maybe removed from api..
   virtual int remove_objs_from_index(
-      const DoutPrefixProvider* dpp,
-      std::list<rgw_obj_index_key>& objs_to_unlink
+      const DoutPrefixProvider* /*dpp*/,
+      std::list<rgw_obj_index_key>& /*objs_to_unlink*/
   ) override {
     return -ENOTSUP;
   }
   virtual int check_index(
-      const DoutPrefixProvider* dpp,
-      std::map<RGWObjCategory, RGWStorageStats>& existing_stats,
-      std::map<RGWObjCategory, RGWStorageStats>& calculated_stats
+      const DoutPrefixProvider* /*dpp*/,
+      std::map<RGWObjCategory, RGWStorageStats>& /*existing_stats*/,
+      std::map<RGWObjCategory, RGWStorageStats>& /*calculated_stats*/
   ) override {
     return -ENOTSUP;
   }
-  virtual int set_tag_timeout(const DoutPrefixProvider* dpp, uint64_t timeout)
-      override {
+  virtual int set_tag_timeout(
+      const DoutPrefixProvider* /*dpp*/, uint64_t /*timeout*/
+  ) override {
     return 0;
   }
-  virtual int purge_instance(const DoutPrefixProvider* dpp) override {
+  virtual int purge_instance(const DoutPrefixProvider* /*dpp*/) override {
     return -ENOTSUP;
   }
 

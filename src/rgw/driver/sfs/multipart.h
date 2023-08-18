@@ -47,7 +47,8 @@ struct SFSMultipartMetaObject : public rgw::sal::SFSObject {
 
   struct SFSMetaObjDeleteOp : public DeleteOp {
     SFSMetaObjDeleteOp() = default;
-    virtual int delete_obj(const DoutPrefixProvider* dpp, optional_yield y)
+    virtual int
+    delete_obj(const DoutPrefixProvider* /*dpp*/, optional_yield /*y*/)
         override {
       return 0;
     }
@@ -64,7 +65,8 @@ struct SFSMultipartMetaObject : public rgw::sal::SFSObject {
   }
 
   virtual int delete_object(
-      const DoutPrefixProvider* dpp, optional_yield y, bool prevent_versioning
+      const DoutPrefixProvider* /*dpp*/, optional_yield /*y*/,
+      bool /*prevent_versioning*/
   ) override {
     return 0;
   }
@@ -257,7 +259,7 @@ struct SFSMultipartSerializer : public StoreMPSerializer {
   SFSMultipartSerializer() = default;
 
   virtual int try_lock(
-      const DoutPrefixProvider* dpp, utime_t dur, optional_yield y
+      const DoutPrefixProvider* /*dpp*/, utime_t /*dur*/, optional_yield /*y*/
   ) override {
     return 0;
   }

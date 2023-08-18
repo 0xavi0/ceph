@@ -40,7 +40,7 @@ SFSObject::SFSReadOp::SFSReadOp(SFSObject* _source) : source(_source) {
 }
 
 int SFSObject::SFSReadOp::prepare(
-    optional_yield y, const DoutPrefixProvider* dpp
+    optional_yield /*y*/, const DoutPrefixProvider* dpp
 ) {
   if (!objref || objref->deleted) {
     // at this point, we don't have an objectref because
@@ -65,8 +65,8 @@ int SFSObject::SFSReadOp::prepare(
 }
 
 int SFSObject::SFSReadOp::get_attr(
-    const DoutPrefixProvider* dpp, const char* name, bufferlist& dest,
-    optional_yield y
+    const DoutPrefixProvider* /*dpp*/, const char* name, bufferlist& dest,
+    optional_yield /*y*/
 ) {
   if (!objref || objref->deleted) {
     return -ENOENT;
@@ -79,7 +79,7 @@ int SFSObject::SFSReadOp::get_attr(
 
 // sync read
 int SFSObject::SFSReadOp::read(
-    int64_t ofs, int64_t end, bufferlist& bl, optional_yield y,
+    int64_t ofs, int64_t end, bufferlist& bl, optional_yield /*y*/,
     const DoutPrefixProvider* dpp
 ) {
   // TODO bounds check, etc.
@@ -105,7 +105,7 @@ int SFSObject::SFSReadOp::read(
 // async read
 int SFSObject::SFSReadOp::iterate(
     const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb,
-    optional_yield y
+    optional_yield /*y*/
 ) {
   // TODO bounds check, etc.
   const auto len = end + 1 - ofs;
@@ -150,7 +150,7 @@ SFSObject::SFSDeleteOp::SFSDeleteOp(
     : source(_source), bucketref(_bucketref) {}
 
 int SFSObject::SFSDeleteOp::delete_obj(
-    const DoutPrefixProvider* dpp, optional_yield y
+    const DoutPrefixProvider* dpp, optional_yield /*y*/
 ) {
   lsfs_dout(dpp, 10) << "bucket: " << source->bucket->get_name()
                      << " bucket versioning: "
@@ -204,17 +204,19 @@ int SFSObject::delete_object(
 }
 
 int SFSObject::copy_object(
-    User* user, req_info* info, const rgw_zone_id& source_zone,
+    User* /*user*/, req_info* /*info*/, const rgw_zone_id& /*source_zone*/,
     rgw::sal::Object* dst_object, rgw::sal::Bucket* dst_bucket,
-    rgw::sal::Bucket* src_bucket, const rgw_placement_rule& dest_placement,
-    ceph::real_time* src_mtime, ceph::real_time* mtime,
-    const ceph::real_time* mod_ptr, const ceph::real_time* unmod_ptr,
-    bool high_precision_time, const char* if_match, const char* if_nomatch,
-    AttrsMod attrs_mod, bool copy_if_newer, Attrs& attrs,
-    RGWObjCategory category, uint64_t olh_epoch,
-    boost::optional<ceph::real_time> delete_at, std::string* version_id,
-    std::string* tag, std::string* etag, void (*progress_cb)(off_t, void*),
-    void* progress_data, const DoutPrefixProvider* dpp, optional_yield y
+    rgw::sal::Bucket* src_bucket, const rgw_placement_rule& /*dest_placement*/,
+    ceph::real_time* /*src_mtime*/, ceph::real_time* /*mtime*/,
+    const ceph::real_time* /*mod_ptr*/, const ceph::real_time* /*unmod_ptr*/,
+    bool /*high_precision_time*/, const char* /*if_match*/,
+    const char* /*if_nomatch*/, AttrsMod /*attrs_mod*/, bool /*copy_if_newer*/,
+    Attrs& /*attrs*/, RGWObjCategory /*category*/, uint64_t /*olh_epoch*/,
+    boost::optional<ceph::real_time> /*delete_at*/, std::string* /*version_id*/,
+    std::string* /*tag*/, std::string* /*etag*/, void (*)(off_t, void*),
+    void* /*progress_data*/
+    ,
+    const DoutPrefixProvider* dpp, optional_yield /*y*/
 ) {
   lsfs_dout(dpp, 10) << "source(bucket: " << src_bucket->get_name()
                      << ", obj: " << get_name()
@@ -293,15 +295,16 @@ void SFSObject::gen_rand_obj_instance_name() {
   because target_obj is left empty, that fail will be explicit.
 */
 int SFSObject::get_obj_attrs(
-    optional_yield y, const DoutPrefixProvider* dpp, rgw_obj* target_obj
+    optional_yield /*y*/, const DoutPrefixProvider* /*dpp*/,
+    rgw_obj* /*target_obj*/
 ) {
   refresh_meta();
   return 0;
 }
 
 int SFSObject::get_obj_state(
-    const DoutPrefixProvider* dpp, RGWObjState** _state, optional_yield y,
-    bool follow_olh
+    const DoutPrefixProvider* /*dpp*/, RGWObjState** _state,
+    optional_yield /*y*/, bool /*follow_olh*/
 ) {
   refresh_meta();
   *_state = &state;
@@ -309,8 +312,8 @@ int SFSObject::get_obj_state(
 }
 
 int SFSObject::set_obj_attrs(
-    const DoutPrefixProvider* dpp, Attrs* setattrs, Attrs* delattrs,
-    optional_yield y
+    const DoutPrefixProvider* /*dpp*/, Attrs* setattrs, Attrs* delattrs,
+    optional_yield /*y*/
 ) {
   ceph_assert(objref);
   map<string, bufferlist>::iterator iter;
@@ -339,8 +342,8 @@ bool SFSObject::get_attr(const std::string& name, bufferlist& dest) {
 }
 
 int SFSObject::modify_obj_attrs(
-    const char* attr_name, bufferlist& attr_val, optional_yield y,
-    const DoutPrefixProvider* dpp
+    const char* attr_name, bufferlist& attr_val, optional_yield /*y*/,
+    const DoutPrefixProvider* /*dpp*/
 ) {
   if (!attr_name) {
     return 0;
@@ -357,7 +360,8 @@ int SFSObject::modify_obj_attrs(
 }
 
 int SFSObject::delete_obj_attrs(
-    const DoutPrefixProvider* dpp, const char* attr_name, optional_yield y
+    const DoutPrefixProvider* /*dpp*/, const char* attr_name,
+    optional_yield /*y*/
 ) {
   if (!attr_name) {
     return 0;
@@ -398,21 +402,21 @@ int SFSObject::transition_to_cloud(
 }
 
 bool SFSObject::placement_rules_match(
-    rgw_placement_rule& r1, rgw_placement_rule& r2
+    rgw_placement_rule& /*r1*/, rgw_placement_rule& /*r2*/
 ) {
   ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
   return true;
 }
 
 int SFSObject::dump_obj_layout(
-    const DoutPrefixProvider* dpp, optional_yield y, Formatter* f
+    const DoutPrefixProvider* /*dpp*/, optional_yield /*y*/, Formatter* /*f*/
 ) {
   ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFSObject::swift_versioning_restore(
-    bool& restored, /* out */
+    bool& /*restored*/, /* out */
     const DoutPrefixProvider* dpp
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": do nothing." << dendl;
@@ -420,30 +424,31 @@ int SFSObject::swift_versioning_restore(
 }
 
 int SFSObject::swift_versioning_copy(
-    const DoutPrefixProvider* dpp, optional_yield y
+    const DoutPrefixProvider* dpp, optional_yield /*y*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": do nothing." << dendl;
   return 0;
 }
 
 int SFSObject::omap_get_vals_by_keys(
-    const DoutPrefixProvider* dpp, const std::string& oid,
-    const std::set<std::string>& keys, Attrs* vals
+    const DoutPrefixProvider* dpp, const std::string& /*oid*/,
+    const std::set<std::string>& /*keys*/, Attrs* /*vals*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFSObject::omap_set_val_by_key(
-    const DoutPrefixProvider* dpp, const std::string& key, bufferlist& val,
-    bool must_exist, optional_yield y
+    const DoutPrefixProvider* dpp, const std::string& /*key*/,
+    bufferlist& /*val*/, bool /*must_exist*/, optional_yield /*y*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFSObject::chown(
-    rgw::sal::User& new_user, const DoutPrefixProvider* dpp, optional_yield y
+    rgw::sal::User& /*new_user*/, const DoutPrefixProvider* dpp,
+    optional_yield /*y*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;

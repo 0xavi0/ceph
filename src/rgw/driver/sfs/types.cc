@@ -343,12 +343,10 @@ bool Bucket::delete_object(
           db_versioned_objs.get_versioned_object(key.instance);
       if (version_to_delete.has_value()) {
         if (version_to_delete->version_type == VersionType::DELETE_MARKER) {
-          _undelete_object(obj, key, db_versioned_objs, *version_to_delete);
+          _undelete_object(key, db_versioned_objs, *version_to_delete);
           return true;
         } else {
-          return _delete_object_version(
-              obj, key, db_versioned_objs, *version_to_delete
-          );
+          return _delete_object_version(db_versioned_objs, *version_to_delete);
         }
       }
       return false;
@@ -378,7 +376,7 @@ std::string Bucket::create_non_existing_object_delete_marker(
 }
 
 bool Bucket::_undelete_object(
-    const Object& obj, const rgw_obj_key& key,
+    const rgw_obj_key& key,
     const sqlite::SQLiteVersionedObjects& sqlite_versioned_objects,
     const sqlite::DBVersionedObject& last_version
 ) const {
@@ -396,18 +394,15 @@ bool Bucket::_undelete_object(
 }
 
 bool Bucket::_delete_object_non_versioned(
-    const Object& obj, const rgw_obj_key& key,
+    const Object& obj, const rgw_obj_key& /*key*/,
     const sqlite::SQLiteVersionedObjects& db_versioned_objs
 ) const {
   auto version_to_delete =
       db_versioned_objs.get_last_versioned_object(obj.path.get_uuid());
-  return _delete_object_version(
-      obj, key, db_versioned_objs, *version_to_delete
-  );
+  return _delete_object_version(db_versioned_objs, *version_to_delete);
 }
 
 bool Bucket::_delete_object_version(
-    const Object& obj, const rgw_obj_key& key,
     const sqlite::SQLiteVersionedObjects& db_versioned_objs,
     const sqlite::DBVersionedObject& version
 ) const {
@@ -423,7 +418,7 @@ bool Bucket::_delete_object_version(
 }
 
 std::string Bucket::_add_delete_marker(
-    const Object& obj, const rgw_obj_key& key,
+    const Object& obj, const rgw_obj_key& /*key*/,
     const sqlite::SQLiteVersionedObjects& db_versioned_objs
 ) const {
   std::string delete_marker_id = generate_new_version_id(store->ceph_context());

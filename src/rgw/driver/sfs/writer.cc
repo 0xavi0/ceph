@@ -203,7 +203,7 @@ void SFSAtomicWriter::cleanup() noexcept {
   }
 }
 
-int SFSAtomicWriter::prepare(optional_yield y) {
+int SFSAtomicWriter::prepare(optional_yield /*y*/) {
   if (store->filesystem_stats_avail_bytes.load() <
       store->min_space_left_for_data_write_ops_bytes) {
     lsfs_dout(dpp, 10) << fmt::format(
@@ -285,7 +285,8 @@ int SFSAtomicWriter::complete(
     size_t accounted_size, const std::string& etag, ceph::real_time* out_mtime,
     ceph::real_time set_mtime, std::map<std::string, bufferlist>& attrs,
     ceph::real_time delete_at, const char* if_match, const char* if_nomatch,
-    const std::string* user_data, rgw_zone_set*, bool* canceled, optional_yield
+    const std::string* /*user_data*/, rgw_zone_set*, bool* /*canceled*/,
+    optional_yield
 ) {
   lsfs_dout(dpp, 10)
       << fmt::format(
@@ -536,7 +537,8 @@ int SFSMultipartWriterV2::complete(
     size_t accounted_size, const std::string& etag, ceph::real_time* mtime,
     ceph::real_time set_mtime, std::map<std::string, bufferlist>& attrs,
     ceph::real_time delete_at, const char* if_match, const char* if_nomatch,
-    const std::string* user_data, rgw_zone_set*, bool* canceled, optional_yield
+    const std::string* /*user_data*/, rgw_zone_set*, bool* /*canceled*/,
+    optional_yield
 ) {
   // NOTE(jecluis): ignored parameters:
   //  * set_mtime

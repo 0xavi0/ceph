@@ -70,7 +70,7 @@ std::unique_ptr<rgw::sal::Object> SFSMultipartUploadV2::get_meta_obj() {
 }
 
 int SFSMultipartUploadV2::init(
-    const DoutPrefixProvider* dpp, optional_yield y, ACLOwner& acl_owner,
+    const DoutPrefixProvider* dpp, optional_yield /*y*/, ACLOwner& acl_owner,
     rgw_placement_rule& dest_placement, rgw::sal::Attrs& attrs
 ) {
   lsfs_dout(dpp, 10) << "upload_id: " << upload_id << ", oid: " << get_key()
@@ -137,8 +137,8 @@ int SFSMultipartUploadV2::init(
 }
 
 int SFSMultipartUploadV2::list_parts(
-    const DoutPrefixProvider* dpp, CephContext* cct, int num_parts, int marker,
-    int* next_marker, bool* truncated, bool assume_unsorted
+    const DoutPrefixProvider* dpp, CephContext* /*cct*/, int num_parts,
+    int marker, int* next_marker, bool* truncated, bool /*assume_unsorted*/
 ) {
   lsfs_dout(dpp, 10) << "num_parts: " << num_parts << ", marker: " << marker
                      << dendl;
@@ -162,7 +162,7 @@ int SFSMultipartUploadV2::list_parts(
 }
 
 int SFSMultipartUploadV2::abort(
-    const DoutPrefixProvider* dpp, CephContext* cct
+    const DoutPrefixProvider* dpp, CephContext* /*cct*/
 ) {
   lsfs_dout(dpp, 10) << "upload_id: " << upload_id << dendl;
 
@@ -176,11 +176,12 @@ int SFSMultipartUploadV2::abort(
 }
 
 int SFSMultipartUploadV2::complete(
-    const DoutPrefixProvider* dpp, optional_yield y, CephContext* cct,
+    const DoutPrefixProvider* dpp, optional_yield /*y*/, CephContext* /*cct*/,
     std::map<int, std::string>& part_etags,
-    std::list<rgw_obj_index_key>& remove_objs, uint64_t& accounted_size,
-    bool& compressed, RGWCompressionInfo& cs_info, off_t& ofs, std::string& tag,
-    ACLOwner& acl_owner, uint64_t olh_epoch, rgw::sal::Object* target_obj
+    std::list<rgw_obj_index_key>& /*remove_objs*/, uint64_t& accounted_size,
+    bool& /*compressed*/, RGWCompressionInfo& /*cs_info*/, off_t& /*ofs*/,
+    std::string& tag, ACLOwner& acl_owner, uint64_t olh_epoch,
+    rgw::sal::Object* target_obj
 ) {
   lsfs_dout(dpp, 10) << fmt::format(
                             "upload_id: {}, accounted_size: {}, tag: {}, "
@@ -488,8 +489,8 @@ int SFSMultipartUploadV2::complete(
 }
 
 int SFSMultipartUploadV2::get_info(
-    const DoutPrefixProvider* dpp, optional_yield y, rgw_placement_rule** rule,
-    rgw::sal::Attrs* attrs
+    const DoutPrefixProvider* dpp, optional_yield /*y*/,
+    rgw_placement_rule** rule, rgw::sal::Attrs* attrs
 ) {
   lsfs_dout(dpp, 10) << fmt::format(
                             "upload_id: {}, obj: {}", upload_id, get_key()
@@ -533,8 +534,8 @@ int SFSMultipartUploadV2::get_info(
 std::unique_ptr<Writer> SFSMultipartUploadV2::get_writer(
     const DoutPrefixProvider* dpp, optional_yield y, rgw::sal::Object* head_obj,
     const rgw_user& writer_owner,
-    const rgw_placement_rule* ptail_placement_rule, uint64_t part_num,
-    const std::string& part_num_str
+    const rgw_placement_rule* /*ptail_placement_rule*/, uint64_t part_num,
+    const std::string& /*part_num_str*/
 ) {
   ceph_assert(part_num <= 10000);
   uint32_t pnum = static_cast<uint32_t>(part_num);
@@ -554,7 +555,7 @@ int SFSMultipartUploadV2::list_multiparts(
     rgw::sal::SFSBucket* bucket, BucketRef bucketref, const std::string& prefix,
     std::string& marker, const std::string& delim, const int& max_uploads,
     std::vector<std::unique_ptr<MultipartUpload>>& uploads,
-    std::map<std::string, bool>* common_prefixes, bool* is_truncated
+    std::map<std::string, bool>* /*common_prefixes*/, bool* is_truncated
 ) {
   auto cls = SFSMultipartUploadV2::get_cls_name();
   auto bucket_name = bucket->get_name();

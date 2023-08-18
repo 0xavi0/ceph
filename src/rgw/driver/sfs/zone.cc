@@ -37,11 +37,11 @@ bool SFSZone::is_writeable() {
   return true;
 }
 
-bool SFSZone::get_redirect_endpoint(std::string* endpoint) {
+bool SFSZone::get_redirect_endpoint(std::string* /*endpoint*/) {
   return false;
 }
 
-bool SFSZone::has_zonegroup_api(const std::string& api) const {
+bool SFSZone::has_zonegroup_api(const std::string& /*api*/) const {
   return false;
 }
 

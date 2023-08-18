@@ -20,15 +20,17 @@ using namespace std;
 namespace rgw::sal {
 
 int SFStore::set_buckets_enabled(
-    const DoutPrefixProvider* dpp, std::vector<rgw_bucket>& buckets_to_enable,
-    bool enabled
+    const DoutPrefixProvider* dpp,
+    std::vector<rgw_bucket>& /*buckets_to_enable*/, bool /*enabled*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFStore::get_bucket(
-    User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* result
+    User* /*u*/
+    ,
+    const RGWBucketInfo& i, std::unique_ptr<Bucket>* result
 ) {
   std::lock_guard l(buckets_map_lock);
   auto it = buckets.find(i.bucket.name);
@@ -43,8 +45,8 @@ int SFStore::get_bucket(
 }
 
 int SFStore::get_bucket(
-    const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b,
-    std::unique_ptr<Bucket>* result, optional_yield y
+    const DoutPrefixProvider* dpp, User* /*u*/, const rgw_bucket& b,
+    std::unique_ptr<Bucket>* result, optional_yield /*y*/
 ) {
   std::lock_guard l(buckets_map_lock);
   auto it = buckets.find(b.name);
@@ -60,8 +62,9 @@ int SFStore::get_bucket(
 }
 
 int SFStore::get_bucket(
-    const DoutPrefixProvider* dpp, User* u, const std::string& tenant,
-    const std::string& name, std::unique_ptr<Bucket>* bucket, optional_yield y
+    const DoutPrefixProvider* dpp, User* /*u*/, const std::string& /*tenant*/,
+    const std::string& name, std::unique_ptr<Bucket>* bucket,
+    optional_yield /*y*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": get_bucket by name: " << name << dendl;
   std::lock_guard l(buckets_map_lock);

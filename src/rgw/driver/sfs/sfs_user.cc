@@ -24,7 +24,7 @@ std::unique_ptr<User> SFStore::get_user(const rgw_user& u) {
   return std::make_unique<SFSUser>(u, this);
 }
 int SFStore::get_user_by_access_key(
-    const DoutPrefixProvider* dpp, const std::string& key, optional_yield y,
+    const DoutPrefixProvider* dpp, const std::string& key, optional_yield /*y*/,
     std::unique_ptr<User>* user
 ) {
   int err = 0;
@@ -40,8 +40,8 @@ int SFStore::get_user_by_access_key(
 }
 
 int SFStore::get_user_by_email(
-    const DoutPrefixProvider* dpp, const std::string& email, optional_yield y,
-    std::unique_ptr<User>* user
+    const DoutPrefixProvider* dpp, const std::string& email,
+    optional_yield /*y*/, std::unique_ptr<User>* user
 ) {
   int err = 0;
   rgw::sal::sfs::sqlite::SQLiteUsers sqlite_users(db_conn);
@@ -56,8 +56,8 @@ int SFStore::get_user_by_email(
 }
 
 int SFStore::get_user_by_swift(
-    const DoutPrefixProvider* dpp, const std::string& user_str,
-    optional_yield y, std::unique_ptr<User>* user
+    const DoutPrefixProvider* dpp, const std::string& /*user_str*/,
+    optional_yield /*y*/, std::unique_ptr<User>* /*user*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;

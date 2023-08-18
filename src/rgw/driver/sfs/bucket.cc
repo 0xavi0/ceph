@@ -48,7 +48,7 @@ SFSBucket::SFSBucket(SFStore* _store, sfs::BucketRef _bucket)
   }
 }
 
-void SFSBucket::write_meta(const DoutPrefixProvider* dpp) {
+void SFSBucket::write_meta(const DoutPrefixProvider* /*dpp*/) {
   // TODO
 }
 
@@ -94,7 +94,7 @@ std::unique_ptr<Object> SFSBucket::get_object(const rgw_obj_key& key) {
  */
 int SFSBucket::list(
     const DoutPrefixProvider* dpp, ListParams& params, int max,
-    ListResults& results, optional_yield y
+    ListResults& results, optional_yield /*y*/
 ) {
   lsfs_dout(dpp, 10) << fmt::format(
                             "listing bucket {} {}: max:{} params:", get_name(),
@@ -257,8 +257,8 @@ int SFSBucket::list(
 }
 
 int SFSBucket::remove_bucket(
-    const DoutPrefixProvider* dpp, bool delete_children, bool forward_to_master,
-    req_info* req_info, optional_yield y
+    const DoutPrefixProvider* dpp, bool delete_children,
+    bool /*forward_to_master*/, req_info* /*req_info*/, optional_yield y
 ) {
   if (!delete_children) {
     if (check_empty(dpp, y)) {
@@ -294,8 +294,8 @@ int SFSBucket::remove_bucket(
 }
 
 int SFSBucket::remove_bucket_bypass_gc(
-    int concurrent_max, bool keep_index_consistent, optional_yield y,
-    const DoutPrefixProvider* dpp
+    int /*concurrent_max*/, bool /*keep_index_consistent*/,
+    optional_yield /*y*/, const DoutPrefixProvider* dpp
 ) {
   /** Remove this bucket, bypassing garbage collection.  May be removed */
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
@@ -303,14 +303,15 @@ int SFSBucket::remove_bucket_bypass_gc(
 }
 
 int SFSBucket::load_bucket(
-    const DoutPrefixProvider* dpp, optional_yield y, bool get_stats
+    const DoutPrefixProvider* /*dpp*/, optional_yield /*y*/, bool /*get_stats*/
 ) {
   // TODO
   return 0;
 }
 
 int SFSBucket::set_acl(
-    const DoutPrefixProvider* dpp, RGWAccessControlPolicy& acl, optional_yield y
+    const DoutPrefixProvider* /*dpp*/, RGWAccessControlPolicy& acl,
+    optional_yield /*y*/
 ) {
   acls = acl;
 
@@ -326,18 +327,19 @@ int SFSBucket::set_acl(
 }
 
 int SFSBucket::chown(
-    const DoutPrefixProvider* dpp, User& new_user, optional_yield y
+    const DoutPrefixProvider* dpp, User& /*new_user*/, optional_yield /*y*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
-bool SFSBucket::is_owner(User* user) {
+bool SFSBucket::is_owner(User* /*user*/) {
   ldout(store->ceph_context(), 10) << __func__ << ": TODO" << dendl;
   return true;
 }
 
-int SFSBucket::check_empty(const DoutPrefixProvider* dpp, optional_yield y) {
+int SFSBucket::
+    check_empty(const DoutPrefixProvider* dpp, optional_yield /*y*/) {
   /** Check in the backing store if this bucket is empty */
   // check if there are still objects owned by the bucket
   sfs::sqlite::SQLiteBuckets db_buckets(store->db_conn);
@@ -349,7 +351,7 @@ int SFSBucket::check_empty(const DoutPrefixProvider* dpp, optional_yield y) {
 }
 
 int SFSBucket::merge_and_store_attrs(
-    const DoutPrefixProvider* dpp, Attrs& new_attrs, optional_yield y
+    const DoutPrefixProvider* /*dpp*/, Attrs& new_attrs, optional_yield /*y*/
 ) {
   for (auto& it : new_attrs) {
     attrs[it.first] = it.second;
@@ -429,7 +431,7 @@ int SFSBucket::list_multiparts(
 }
 
 int SFSBucket::abort_multiparts(
-    const DoutPrefixProvider* dpp, CephContext* cct
+    const DoutPrefixProvider* dpp, CephContext* /*cct*/
 ) {
   lsfs_dout(
       dpp, 10
@@ -439,22 +441,24 @@ int SFSBucket::abort_multiparts(
 }
 
 int SFSBucket::try_refresh_info(
-    const DoutPrefixProvider* dpp, ceph::real_time* pmtime
+    const DoutPrefixProvider* dpp, ceph::real_time* /*pmtime*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 
 int SFSBucket::read_usage(
-    const DoutPrefixProvider* dpp, uint64_t start_epoch, uint64_t end_epoch,
-    uint32_t max_entries, bool* is_truncated, RGWUsageIter& usage_iter,
-    std::map<rgw_user_bucket, rgw_usage_log_entry>& usage
+    const DoutPrefixProvider* dpp, uint64_t /*start_epoch*/,
+    uint64_t /*end_epoch*/, uint32_t /*max_entries*/, bool* /*is_truncated*/,
+    RGWUsageIter& /*usage_iter*/,
+    std::map<rgw_user_bucket, rgw_usage_log_entry>& /*usage*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
 }
 int SFSBucket::trim_usage(
-    const DoutPrefixProvider* dpp, uint64_t start_epoch, uint64_t end_epoch
+    const DoutPrefixProvider* dpp, uint64_t /*start_epoch*/,
+    uint64_t /*end_epoch*/
 ) {
   ldpp_dout(dpp, 10) << __func__ << ": TODO" << dendl;
   return -ENOTSUP;
@@ -467,7 +471,7 @@ int SFSBucket::rebuild_index(const DoutPrefixProvider* dpp) {
 
 int SFSBucket::check_quota(
     const DoutPrefixProvider* dpp, RGWQuota& quota, uint64_t obj_size,
-    optional_yield y, bool check_size_only
+    optional_yield /*y*/, bool /*check_size_only*/
 ) {
   ldpp_dout(dpp, 10) << __func__
                      << ": user(max size: " << quota.user_quota.max_size
@@ -480,28 +484,28 @@ int SFSBucket::check_quota(
 }
 
 int SFSBucket::read_stats(
-    const DoutPrefixProvider* dpp,
-    const bucket_index_layout_generation& idx_layout, int shard_id,
-    std::string* bucket_ver, std::string* master_ver,
-    std::map<RGWObjCategory, RGWStorageStats>& stats, std::string* max_marker,
-    bool* syncstopped
+    const DoutPrefixProvider* /*dpp*/,
+    const bucket_index_layout_generation& /*idx_layout*/, int /*shard_id*/,
+    std::string* /*bucket_ver*/, std::string* /*master_ver*/,
+    std::map<RGWObjCategory, RGWStorageStats>& /*stats*/,
+    std::string* /*max_marker*/, bool* /*syncstopped*/
 ) {
   return 0;
 }
 int SFSBucket::read_stats_async(
-    const DoutPrefixProvider* dpp,
-    const bucket_index_layout_generation& idx_layout, int shard_id,
-    RGWGetBucketStats_CB* ctx
+    const DoutPrefixProvider* /*dpp*/,
+    const bucket_index_layout_generation& /*idx_layout*/, int /*shard_id*/,
+    RGWGetBucketStats_CB* /*ctx*/
 ) {
   return 0;
 }
 
 int SFSBucket::sync_user_stats(
-    const DoutPrefixProvider* dpp, optional_yield y
+    const DoutPrefixProvider* /*dpp*/, optional_yield /*y*/
 ) {
   return 0;
 }
-int SFSBucket::update_container_stats(const DoutPrefixProvider* dpp) {
+int SFSBucket::update_container_stats(const DoutPrefixProvider* /*dpp*/) {
   return 0;
 }
 int SFSBucket::check_bucket_shards(const DoutPrefixProvider* dpp) {
@@ -509,7 +513,8 @@ int SFSBucket::check_bucket_shards(const DoutPrefixProvider* dpp) {
   return -ENOTSUP;
 }
 int SFSBucket::put_info(
-    const DoutPrefixProvider* dpp, bool exclusive, ceph::real_time set_mtime
+    const DoutPrefixProvider* /*dpp*/, bool /*exclusive*/,
+    ceph::real_time /*set_mtime*/
 ) {
   if (get_info().flags & BUCKET_VERSIONS_SUSPENDED) {
     return -ERR_NOT_IMPLEMENTED;
