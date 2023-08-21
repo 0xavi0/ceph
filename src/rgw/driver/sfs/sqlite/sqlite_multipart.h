@@ -240,6 +240,14 @@ class SQLiteMultipart {
   remove_multiparts_by_bucket_id_transact(
       const std::string& bucket_id, uint max_items
   ) const;
+
+  /**
+  * @brief Removes multiparts that are done or aborted and returns the IDs that identify those parts in the filesystem
+  * @param max_items Max parts to be deleted in this call
+  * @return List of <object_uuid, part_id> that identifies the parts in the filesystem
+  */
+  std::optional<DBDeletedMultipartItems>
+  remove_done_or_aborted_multiparts_transact(uint max_items) const;
 };
 
 }  // namespace rgw::sal::sfs::sqlite

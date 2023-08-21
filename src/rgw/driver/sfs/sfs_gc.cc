@@ -58,11 +58,17 @@ int SFSGC::process() {
   }
   // process deleted buckets
   time_to_process_more = process_deleted_buckets();
-  bool more_objects = true;
-  while (time_to_process_more && more_objects) {
-    // process deleted objects now in batches
-    time_to_process_more = process_deleted_objects(more_objects);
+  if (!time_to_process_more) {
+    return 0;
   }
+  // process deleted objects
+  time_to_process_more = process_deleted_objects();
+  if (!time_to_process_more) {
+    return 0;
+  }
+
+  // process done or aborted multiparts
+  time_to_process_more = process_done_and_aborted_multiparts();
   return 0;
 }
 
@@ -137,7 +143,17 @@ bool SFSGC::process_deleted_buckets() {
   return true;
 }
 
-bool SFSGC::process_deleted_objects(bool& more_objects) {
+bool SFSGC::process_deleted_objects() {
+  bool more_objects = true;
+  bool time_to_process_more = true;
+  while (time_to_process_more && more_objects) {
+    // process deleted objects now in batches
+    time_to_process_more = process_deleted_objects_batch(more_objects);
+  }
+  return time_to_process_more;
+}
+
+bool SFSGC::process_deleted_objects_batch(bool& more_objects) {
   more_objects = true;
   sqlite::SQLiteVersionedObjects db_versions(store->db_conn);
   pending_objects_to_delete = db_versions.remove_deleted_versions_transact(
@@ -148,6 +164,31 @@ bool SFSGC::process_deleted_objects(bool& more_objects) {
     more_objects = false;
   }
   return delete_pending_objects_data();
+}
+
+bool SFSGC::process_done_and_aborted_multiparts() {
+  bool all_parts_deleted = false;
+  bool time_to_process_more = true;
+  while (time_to_process_more && !all_parts_deleted) {
+    // process deleted objects now in batches
+    time_to_process_more =
+        process_done_and_aborted_multiparts_batch(all_parts_deleted);
+  }
+  return time_to_process_more;
+}
+
+bool SFSGC::process_done_and_aborted_multiparts_batch(bool& all_parts_deleted) {
+  all_parts_deleted = false;
+  sqlite::SQLiteMultipart db_multipart(store->db_conn);
+  pending_multiparts_to_delete =
+      db_multipart.remove_done_or_aborted_multiparts_transact(
+          max_objects_to_delete_per_iteration
+      );
+  if (pending_multiparts_to_delete.has_value() &&
+      (*pending_multiparts_to_delete).empty()) {
+    all_parts_deleted = true;
+  }
+  return delete_pending_multiparts_data();
 }
 
 bool SFSGC::delete_pending_objects_data() {

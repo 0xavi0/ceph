@@ -16,6 +16,7 @@
 #include <driver/sfs/sqlite/buckets/multipart_definitions.h>
 #include <sqlite_orm/sqlite_orm.h>
 
+#include <iterator>
 #include <optional>
 
 #include "retry.h"
@@ -483,13 +484,77 @@ SQLiteMultipart::remove_multiparts_by_bucket_id_transact(
         where(is_equal(&DBMultipart::bucket_id, bucket_id)),
         order_by(&DBMultipartPart::id), limit(max_items)
     );
-    auto ids = storage.select(
-        &DBMultipartPart::id,
+    // extract the ids from the query.
+    // we'll use the ids to delete them with remove_all where in.
+    std::vector<int> ids;
+    ids.reserve(ret_parts.size());
+    std::ranges::transform(
+        ret_parts, std::back_inserter(ids),
+        [](DBDeletedMultipartItem item) -> int { return get_part_id(item); }
+    );
+    ceph_assert(ids.size() == ret_parts.size());
+    if (ret_parts.size() == 0) {
+      // nothing to be deleted. We can return now
+      // no need to commit the transaction as nothing was changed
+      return ret_parts;
+    }
+    // remove the parts selected
+    storage.remove_all<DBMultipartPart>(where(in(&DBMultipartPart::id, ids)));
+
+    // now check if the multipart holding the part is empty
+    std::map<std::string, bool> already_checked_mp;
+    for (auto const& part : ret_parts) {
+      auto upload_id = get_upload_id(part);
+      if (already_checked_mp.find(upload_id) == already_checked_mp.end()) {
+        already_checked_mp[upload_id] = true;
+
+        auto nb_parts = storage.count(
+            &DBMultipartPart::id,
+            where(is_equal(&DBMultipartPart::upload_id, upload_id))
+        );
+        if (nb_parts == 0) {
+          // delete this multipart as it has no parts
+          storage.remove_all<DBMultipart>(
+              where(is_equal(&DBMultipart::upload_id, upload_id))
+          );
+        }
+      }
+    }
+    transaction.commit();
+    return ret_parts;
+  });
+  return retry.run();
+}
+
+std::optional<DBDeletedMultipartItems>
+SQLiteMultipart::remove_done_or_aborted_multiparts_transact(uint max_items
+) const {
+  DBDeletedMultipartItems ret_parts;
+  auto storage = conn->get_storage();
+  RetrySQLite<DBDeletedMultipartItems> retry([&]() {
+    auto transaction = storage.transaction_guard();
+    // get first the list of parts to be deleted up to max_items
+    ret_parts = storage.select(
+        columns(
+            &DBMultipart::upload_id, &DBMultipart::path_uuid,
+            &DBMultipartPart::id
+        ),
         inner_join<DBMultipart>(
             on(is_equal(&DBMultipart::upload_id, &DBMultipartPart::upload_id))
         ),
-        where(is_equal(&DBMultipart::bucket_id, bucket_id)),
+        where(
+            is_equal(&DBMultipart::state, MultipartState::DONE) or
+            is_equal(&DBMultipart::state, MultipartState::ABORTED)
+        ),
         order_by(&DBMultipartPart::id), limit(max_items)
+    );
+    // extract the ids from the query.
+    // we'll use the ids to delete them with remove_all where in.
+    std::vector<int> ids;
+    ids.reserve(ret_parts.size());
+    std::ranges::transform(
+        ret_parts, std::back_inserter(ids),
+        [](DBDeletedMultipartItem item) -> int { return get_part_id(item); }
     );
     ceph_assert(ids.size() == ret_parts.size());
     if (ret_parts.size() == 0) {

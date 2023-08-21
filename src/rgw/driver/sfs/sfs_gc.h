@@ -72,14 +72,17 @@ class SFSGC : public DoutPrefixProvider {
   // Return false if it was forced to exit because max process time was met
   // which means there are still objects to be deleted
   bool process_deleted_buckets();
-  bool process_deleted_objects(bool& more_objects);
-  bool delete_bucket(const std::string& bucket_id, bool& bucket_deleted);
+  bool process_deleted_objects();
   bool delete_pending_objects_data();
   bool delete_pending_multiparts_data();
+  bool process_done_and_aborted_multiparts();
   bool abort_bucket_multiparts(const std::string& bucket_id);
   bool delete_bucket_multiparts(
       const std::string& bucket_id, bool& all_parts_deleted
   );
+  bool process_deleted_objects_batch(bool& more_objects);
+  bool process_done_and_aborted_multiparts_batch(bool& all_parts_deleted);
+  bool delete_bucket(const std::string& bucket_id, bool& bucket_deleted);
   bool process_time_elapsed() const;
 
   std::optional<sqlite::DBDeletedObjectItems> pending_objects_to_delete;

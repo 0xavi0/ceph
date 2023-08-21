@@ -131,14 +131,36 @@ class TestSFSGC : public ::testing::Test {
     return bucket.has_value();
   }
 
-  rgw::sal::sfs::sqlite::DBOPMultipart createMultipart(
-      const std::string& bucket_id, const std::string& upload_id, DBConnRef conn
+  rgw::sal::sfs::sqlite::DBOPMultipart createMultipartWithParts(
+      const std::string& bucket_id, const std::string& upload_id,
+      rgw::sal::sfs::MultipartState state, uint num_parts, DBConnRef conn
   ) {
     SQLiteMultipart db_multiparts(conn);
     rgw::sal::sfs::sqlite::DBOPMultipart mp;
     mp.bucket_id = bucket_id;
     mp.upload_id = upload_id;
-    mp.state = rgw::sal::sfs::MultipartState::DONE;
+    mp.state = state;
+    mp.state_change_time = ceph::real_clock::now();
+    mp.object_name = upload_id;
+    uuid_d uuid;
+    uuid.generate_random();
+    mp.path_uuid = uuid;
+    db_multiparts.insert(mp);
+    for (uint i = 1; i <= num_parts; ++i) {
+      createMultipartPart(upload_id, uuid, i, conn);
+    }
+    return mp;
+  }
+
+  rgw::sal::sfs::sqlite::DBOPMultipart createMultipart(
+      const std::string& bucket_id, const std::string& upload_id,
+      rgw::sal::sfs::MultipartState state, DBConnRef conn
+  ) {
+    SQLiteMultipart db_multiparts(conn);
+    rgw::sal::sfs::sqlite::DBOPMultipart mp;
+    mp.bucket_id = bucket_id;
+    mp.upload_id = upload_id;
+    mp.state = state;
     mp.state_change_time = ceph::real_clock::now();
     mp.object_name = upload_id;
     uuid_d uuid;
@@ -342,28 +364,16 @@ TEST_F(TestSFSGC, TestDeletedBucketsWithMultiparts) {
   EXPECT_TRUE(databaseFileExists());
 
   // now create multiparts with a few parts
-  auto multipart1 =
-      createMultipart("test_bucket_1", "multipart1", store->db_conn);
-  auto part1_1 = createMultipartPart(
-      "multipart1", multipart1.path_uuid, 1, store->db_conn
-  );
-  auto part1_2 = createMultipartPart(
-      "multipart1", multipart1.path_uuid, 2, store->db_conn
-  );
-  auto part1_3 = createMultipartPart(
-      "multipart1", multipart1.path_uuid, 3, store->db_conn
-  );
-  auto part1_4 = createMultipartPart(
-      "multipart1", multipart1.path_uuid, 4, store->db_conn
+  // we don't set the state to DONE nor ABORTED so GC only deletes them
+  // when deleting the bucket containing them
+  auto multipart1 = createMultipartWithParts(
+      "test_bucket_1", "multipart1", rgw::sal::sfs::MultipartState::COMPLETE, 4,
+      store->db_conn
   );
 
-  auto multipart2 =
-      createMultipart("test_bucket_2", "multipart2", store->db_conn);
-  auto part2_1 = createMultipartPart(
-      "multipart2", multipart2.path_uuid, 1, store->db_conn
-  );
-  auto part2_2 = createMultipartPart(
-      "multipart2", multipart2.path_uuid, 2, store->db_conn
+  auto multipart2 = createMultipartWithParts(
+      "test_bucket_2", "multipart2", rgw::sal::sfs::MultipartState::COMPLETE, 2,
+      store->db_conn
   );
 
   // we should have 11 files (5 version + 6 parts)
@@ -471,6 +481,7 @@ TEST_F(TestSFSGC, TestDeletedObjectsAndDeletedBuckets) {
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
   auto gc = store->gc;
+  gc->initialize();
   gc->suspend();  // start suspended so we have control over processing
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -541,4 +552,105 @@ TEST_F(TestSFSGC, TestDeletedObjectsAndDeletedBuckets) {
   gc->process();
   // all should be gone
   EXPECT_EQ(getStoreDataFileCount(), 0);
+}
+
+TEST_F(TestSFSGC, TestDoneAndAbortedMultiparts) {
+  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
+  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  uint MAX_OBJECTS_ITERATION = 1;
+  ceph_context->_conf.set_val(
+      "rgw_sfs_gc_max_objects_per_iteration",
+      std::to_string(MAX_OBJECTS_ITERATION)
+  );
+  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto gc = store->gc;
+  gc->initialize();
+  gc->suspend();  // start suspended so we have control over processing
+
+  NoDoutPrefix ndp(ceph_context.get(), 1);
+  RGWEnv env;
+  env.init(ceph_context.get());
+
+  // create the test user
+  createTestUser(store->db_conn);
+
+  // create 2 buckets
+  createTestBucket("test_bucket_1", store->db_conn);
+  createTestBucket("test_bucket_2", store->db_conn);
+
+  // create a few objects in bucket_1 with a few versions
+  uint version_id = 1;
+  auto object1 = createTestObject("test_bucket_1", "obj_1", store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+
+  auto object2 = createTestObject("test_bucket_2", "obj_2", store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+
+  // we should have 5 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  EXPECT_TRUE(databaseFileExists());
+
+  // now create multiparts with a few parts in states that are not done
+  // nor aborted
+  auto multipart1 = createMultipartWithParts(
+      "test_bucket_1", "multipart1", rgw::sal::sfs::MultipartState::INPROGRESS,
+      10, store->db_conn
+  );
+
+  auto multipart2 = createMultipartWithParts(
+      "test_bucket_2", "multipart2", rgw::sal::sfs::MultipartState::COMPLETE, 5,
+      store->db_conn
+  );
+
+  auto multipart3 = createMultipartWithParts(
+      "test_bucket_1", "multipart3", rgw::sal::sfs::MultipartState::AGGREGATING,
+      20, store->db_conn
+  );
+
+  // now add 2 done multiparts
+  auto multipart4 = createMultipartWithParts(
+      "test_bucket_1", "multipart4", rgw::sal::sfs::MultipartState::DONE, 10,
+      store->db_conn
+  );
+  auto multipart5 = createMultipartWithParts(
+      "test_bucket_1", "multipart5", rgw::sal::sfs::MultipartState::DONE, 5,
+      store->db_conn
+  );
+
+  // add also 1 multipart aborted
+  auto multipart6 = createMultipartWithParts(
+      "test_bucket_1", "multipart6", rgw::sal::sfs::MultipartState::ABORTED, 5,
+      store->db_conn
+  );
+
+  // we should have 60 files (5 version + 55 parts)
+  EXPECT_EQ(getStoreDataFileCount(), 60);
+  SQLiteVersionedObjects db_versioned_objs(store->db_conn);
+  auto versions = db_versioned_objs.get_versioned_object_ids();
+  EXPECT_EQ(versions.size(), 5);
+
+  gc->process();
+  // parts for multiparts DONE and ABORTED should be gone now.
+  EXPECT_EQ(getStoreDataFileCount(), 40);
+
+  // set multipart3 to DONE (it was previously AGGREGATTING)
+  rgw::sal::sfs::sqlite::SQLiteMultipart db_multipart(store->db_conn);
+  EXPECT_TRUE(db_multipart.mark_done("multipart3"));
+
+  gc->process();
+  // multipart had 20 parts so we should have 20 files now
+  EXPECT_EQ(getStoreDataFileCount(), 20);
+
+  // check that the multiparts deleted don't exist in the db
+  EXPECT_FALSE(db_multipart.get_multipart("multipart3").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart4").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart5").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart6").has_value());
+
+  // check that the multiparts not deleted remain in thd db
+  EXPECT_TRUE(db_multipart.get_multipart("multipart1").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart2").has_value());
 }
