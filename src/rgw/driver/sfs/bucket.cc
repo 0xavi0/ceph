@@ -175,7 +175,7 @@ int SFSBucket::list(
     // Ignore params.access_list_filter. A filter for multipart "meta"
     // objects that SFS doesn't have.
     sfs::sqlite::SQLiteMultipart multipart(store->db_conn);
-    std::vector<sfs::sqlite::DBOPMultipart> multiparts =
+    std::vector<sfs::sqlite::DBMultipart> multiparts =
         multipart.list_multiparts_by_bucket_id(
             get_bucket_id(), params.prefix, params.marker.name, "", max,
             &results.is_truncated, false
@@ -443,7 +443,7 @@ static bool try_resolve_mp_from_oid(
   if ((id == 0) && !err.empty()) {
     return false;
   }
-  std::optional<sfs::sqlite::DBOPMultipart> maybe_mp = mpdb.get_multipart(id);
+  std::optional<sfs::sqlite::DBMultipart> maybe_mp = mpdb.get_multipart(id);
   if (!maybe_mp.has_value()) {
     return false;
   }

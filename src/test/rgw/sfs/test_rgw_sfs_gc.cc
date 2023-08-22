@@ -131,12 +131,12 @@ class TestSFSGC : public ::testing::Test {
     return bucket.has_value();
   }
 
-  rgw::sal::sfs::sqlite::DBOPMultipart createMultipartWithParts(
+  rgw::sal::sfs::sqlite::DBMultipart createMultipartWithParts(
       const std::string& bucket_id, const std::string& upload_id,
       rgw::sal::sfs::MultipartState state, uint num_parts, DBConnRef conn
   ) {
     SQLiteMultipart db_multiparts(conn);
-    rgw::sal::sfs::sqlite::DBOPMultipart mp;
+    rgw::sal::sfs::sqlite::DBMultipart mp;
     mp.bucket_id = bucket_id;
     mp.upload_id = upload_id;
     mp.state = state;
@@ -152,12 +152,12 @@ class TestSFSGC : public ::testing::Test {
     return mp;
   }
 
-  rgw::sal::sfs::sqlite::DBOPMultipart createMultipart(
+  rgw::sal::sfs::sqlite::DBMultipart createMultipart(
       const std::string& bucket_id, const std::string& upload_id,
       rgw::sal::sfs::MultipartState state, DBConnRef conn
   ) {
     SQLiteMultipart db_multiparts(conn);
-    rgw::sal::sfs::sqlite::DBOPMultipart mp;
+    rgw::sal::sfs::sqlite::DBMultipart mp;
     mp.bucket_id = bucket_id;
     mp.upload_id = upload_id;
     mp.state = state;

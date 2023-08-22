@@ -37,6 +37,8 @@ template <>
 struct __ceph_ns_decode<RGWUserCaps> : std::false_type {};
 template <>
 struct __ceph_ns_decode<ACLOwner> : std::false_type {};
+template <>
+struct __ceph_ns_decode<rgw_placement_rule> : std::false_type {};
 
 template <typename BLOB_HOLDER, typename DEST>
 void decode_blob(const BLOB_HOLDER& blob_holder, DEST& dest) {

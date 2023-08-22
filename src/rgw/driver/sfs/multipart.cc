@@ -24,7 +24,6 @@
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/multipart_definitions.h"
 #include "rgw_sal_sfs.h"
-#include "sqlite/buckets/multipart_conversions.h"
 #include "writer.h"
 
 #define dout_subsys ceph_subsys_rgw
@@ -97,7 +96,7 @@ int SFSMultipartUploadV2::init(
   uuid.generate_random();
   auto now = ceph::real_time::clock::now();
 
-  sfs::sqlite::DBOPMultipart mpop{
+  sfs::sqlite::DBMultipart mpop{
       .id = -1 /* ignored by insert */,
       .bucket_id = bucket->get_bucket_id(),
       .upload_id = upload_id,

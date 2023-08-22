@@ -22,7 +22,6 @@
 #include "retry.h"
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/bucket_definitions.h"
-#include "rgw/driver/sfs/sqlite/buckets/multipart_conversions.h"
 #include "rgw/driver/sfs/sqlite/conversion_utils.h"
 
 using namespace sqlite_orm;
@@ -31,7 +30,7 @@ namespace rgw::sal::sfs::sqlite {
 
 SQLiteMultipart::SQLiteMultipart(DBConnRef _conn) : conn(_conn) {}
 
-std::optional<std::vector<DBOPMultipart>> SQLiteMultipart::list_multiparts(
+std::optional<std::vector<DBMultipart>> SQLiteMultipart::list_multiparts(
     const std::string& bucket_name, const std::string& prefix,
     const std::string& marker, const std::string& delim, const int& max_uploads,
     bool* is_truncated
@@ -52,12 +51,11 @@ std::optional<std::vector<DBOPMultipart>> SQLiteMultipart::list_multiparts(
   );
 }
 
-std::vector<DBOPMultipart> SQLiteMultipart::list_multiparts_by_bucket_id(
+std::vector<DBMultipart> SQLiteMultipart::list_multiparts_by_bucket_id(
     const std::string& bucket_id, const std::string& prefix,
     const std::string& marker, const std::string& /*delim*/,
     const int& max_uploads, bool* is_truncated, bool get_all
 ) const {
-  std::vector<DBOPMultipart> entries;
   auto storage = conn->get_storage();
 
   auto start_state = get_all ? MultipartState::NONE : MultipartState::INIT;
@@ -87,11 +85,7 @@ std::vector<DBOPMultipart> SQLiteMultipart::list_multiparts_by_bucket_id(
     }
   }
 
-  for (const auto& e : db_entries) {
-    entries.push_back(get_rgw_multipart(e));
-  }
-
-  return entries;
+  return db_entries;
 }
 
 int SQLiteMultipart::abort_multiparts_by_bucket_id(const std::string& bucket_id
@@ -128,7 +122,7 @@ int SQLiteMultipart::abort_multiparts(const std::string& bucket_name) const {
   return abort_multiparts_by_bucket_id(bucket_id);
 }
 
-std::optional<DBOPMultipart> SQLiteMultipart::get_multipart(
+std::optional<DBMultipart> SQLiteMultipart::get_multipart(
     const std::string& upload_id
 ) const {
   if (upload_id.empty()) {
@@ -140,30 +134,29 @@ std::optional<DBOPMultipart> SQLiteMultipart::get_multipart(
       where(is_equal(&DBMultipart::upload_id, upload_id))
   );
   ceph_assert(entries.size() <= 1);
-  std::optional<DBOPMultipart> mp;
+  std::optional<DBMultipart> mp;
   if (entries.size() == 1) {
-    mp = get_rgw_multipart(entries[0]);
+    mp = entries[0];
   }
   return mp;
 }
 
-std::optional<DBOPMultipart> SQLiteMultipart::get_multipart(int id) const {
+std::optional<DBMultipart> SQLiteMultipart::get_multipart(int id) const {
   ceph_assert(id >= 0);
   auto storage = conn->get_storage();
   auto entries =
       storage.get_all<DBMultipart>(where(is_equal(&DBMultipart::id, id)));
   ceph_assert(entries.size() <= 1);  // primary key
-  std::optional<DBOPMultipart> mp;
+  std::optional<DBMultipart> mp;
   if (entries.size() == 1) {
-    mp = get_rgw_multipart(entries[0]);
+    mp = entries[0];
   }
   return mp;
 }
 
-uint SQLiteMultipart::insert(const DBOPMultipart& mp) const {
+uint SQLiteMultipart::insert(const DBMultipart& mp) const {
   auto storage = conn->get_storage();
-  auto db_mp = get_db_multipart(mp);
-  return storage.insert(db_mp);
+  return storage.insert(mp);
 }
 
 std::vector<DBMultipartPart> SQLiteMultipart::list_parts(

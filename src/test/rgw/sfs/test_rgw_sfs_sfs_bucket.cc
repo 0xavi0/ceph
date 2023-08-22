@@ -1418,7 +1418,7 @@ TEST_F(TestSFSBucket, ListNamespaceMultipartsBasics) {
   auto now = ceph::real_time::clock::now();
 
   SQLiteMultipart multipart(store->db_conn);
-  DBOPMultipart mpop{
+  DBMultipart mpop{
       .id = -1 /* ignored by insert */,
       .bucket_id = uut->get_bucket_id(),
       .upload_id = "upload",

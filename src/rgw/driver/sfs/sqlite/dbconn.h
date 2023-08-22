@@ -221,17 +221,9 @@ inline auto _make_storage(const std::string& path) {
           sqlite_orm::make_column("path_uuid", &DBMultipart::path_uuid),
           sqlite_orm::make_column("meta_str", &DBMultipart::meta_str),
           sqlite_orm::make_column("owner_id", &DBMultipart::owner_id),
-          sqlite_orm::make_column(
-              "owner_display_name", &DBMultipart::owner_display_name
-          ),
           sqlite_orm::make_column("mtime", &DBMultipart::mtime),
           sqlite_orm::make_column("attrs", &DBMultipart::attrs),
-          sqlite_orm::make_column(
-              "placement_name", &DBMultipart::placement_name
-          ),
-          sqlite_orm::make_column(
-              "placement_storage_class", &DBMultipart::placement_storage_class
-          ),
+          sqlite_orm::make_column("placement", &DBMultipart::placement),
           sqlite_orm::unique(&DBMultipart::upload_id),
           sqlite_orm::unique(&DBMultipart::bucket_id, &DBMultipart::upload_id),
           sqlite_orm::unique(&DBMultipart::path_uuid),

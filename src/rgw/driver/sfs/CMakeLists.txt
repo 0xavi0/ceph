@@ -14,56 +14,55 @@ set(SQLITE_COMPILE_FLAGS "-DSQLITE_THREADSAFE=1")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SQLITE_COMPILE_FLAGS}")
 
 set(sfs_srcs
-    sqlite/sqlite_users.cc
-    sqlite/sqlite_buckets.cc
-    sqlite/sqlite_objects.cc
-    sqlite/sqlite_versioned_objects.cc
-    sqlite/sqlite_lifecycle.cc
-    sqlite/sqlite_multipart.cc
-    sqlite/users/users_conversions.cc
-    sqlite/buckets/bucket_conversions.cc
-    sqlite/buckets/multipart_conversions.cc
-    sqlite/dbconn.cc
-    sqlite/errors.cc
-    sqlite/sqlite_list.cc
-    bucket.cc
-    multipart.cc
-    object.cc
-    user.cc
-    types.cc
-    zone.cc
-    writer.cc
-    sfs_bucket.cc
-    sfs_gc.cc
-    sfs_user.cc
-    sfs_lc.cc
-    )
+  sqlite/sqlite_users.cc
+  sqlite/sqlite_buckets.cc
+  sqlite/sqlite_objects.cc
+  sqlite/sqlite_versioned_objects.cc
+  sqlite/sqlite_lifecycle.cc
+  sqlite/sqlite_multipart.cc
+  sqlite/users/users_conversions.cc
+  sqlite/buckets/bucket_conversions.cc
+  sqlite/dbconn.cc
+  sqlite/errors.cc
+  sqlite/sqlite_list.cc
+  bucket.cc
+  multipart.cc
+  object.cc
+  user.cc
+  types.cc
+  zone.cc
+  writer.cc
+  sfs_bucket.cc
+  sfs_gc.cc
+  sfs_user.cc
+  sfs_lc.cc
+)
 
 add_library(sfs STATIC ${sfs_srcs})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-target_compile_options(sfs PRIVATE
-   -Werror -Wextra
-   -Wunused-function
-   -Wunused-result
-   -Wshadow
-   -Wno-error=unused-parameter)
+  target_compile_options(sfs PRIVATE
+    -Werror -Wextra
+    -Wunused-function
+    -Wunused-result
+    -Wshadow
+    -Wno-error=unused-parameter)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
-target_compile_options(sfs PRIVATE
-   -Werror -Wextra
-   -Wunused-function
-   -Wunused-result
-   -Wshadow
-   -Wno-error=unused-parameter
-   -Wno-error=unqualified-std-cast-call)
+  target_compile_options(sfs PRIVATE
+    -Werror -Wextra
+    -Wunused-function
+    -Wunused-result
+    -Wshadow
+    -Wno-error=unused-parameter
+    -Wno-error=unqualified-std-cast-call)
 endif(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
 
 # Mark ceph includes system to not see "our" warnings there
 target_include_directories(sfs
-    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/fmt/include"
-    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw"
-    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src"
-    SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
+  SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/fmt/include"
+  SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw"
+  SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src"
+  SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/include")
 set(link_targets spawn)
 
 if(WITH_JAEGER)

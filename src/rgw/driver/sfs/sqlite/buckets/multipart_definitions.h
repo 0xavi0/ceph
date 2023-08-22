@@ -22,24 +22,6 @@ namespace rgw::sal::sfs::sqlite {
 
 using BLOB = std::vector<char>;
 
-struct DBMultipart {
-  int id;
-  std::string bucket_id;
-  std::string upload_id;
-  MultipartState state;
-  ceph::real_time state_change_time;
-  std::string object_name;
-  uuid_d path_uuid;
-  std::string meta_str;
-
-  std::string owner_id;
-  std::string owner_display_name;
-  ceph::real_time mtime;
-  BLOB attrs;
-  std::string placement_name;
-  std::string placement_storage_class;
-};
-
 struct DBMultipartPart {
   int id;
   std::string upload_id;
@@ -51,7 +33,7 @@ struct DBMultipartPart {
   inline bool is_finished() const { return etag.has_value(); }
 };
 
-struct DBOPMultipart {
+struct DBMultipart {
   int id;
   std::string bucket_id;
   std::string upload_id;

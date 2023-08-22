@@ -33,6 +33,9 @@ struct __is_sqlite_blob<rgw::sal::Attrs> : std::true_type {};
 template <>
 struct __is_sqlite_blob<ACLOwner> : std::true_type {};
 
+template <>
+struct __is_sqlite_blob<rgw_placement_rule> : std::true_type {};
+
 template <class T>
 struct type_printer<T, typename std::enable_if<is_sqlite_blob<T>, void>::type>
     : public blob_printer {};

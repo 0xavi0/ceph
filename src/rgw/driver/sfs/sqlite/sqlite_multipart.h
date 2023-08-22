@@ -14,7 +14,6 @@
 #ifndef RGW_DRIVER_SFS_SQLITE_SQLITE_MULTIPART_H
 #define RGW_DRIVER_SFS_SQLITE_SQLITE_MULTIPART_H
 
-#include "buckets/multipart_conversions.h"
 #include "dbconn.h"
 
 namespace rgw::sal::sfs::sqlite {
@@ -38,9 +37,9 @@ class SQLiteMultipart {
    * @param max_uploads Maximum number of multipart uploads to obtain, per page.
    * @param is_truncated Whether the results have been truncated due to
    * pagination.
-   * @return std::optional<std::vector<DBOPMultipart>>
+   * @return std::optional<std::vector<DBMultipart>>
    */
-  std::optional<std::vector<DBOPMultipart>> list_multiparts(
+  std::optional<std::vector<DBMultipart>> list_multiparts(
       const std::string& bucket_name, const std::string& prefix,
       const std::string& marker, const std::string& delim,
       const int& max_uploads, bool* is_truncated
@@ -58,9 +57,9 @@ class SQLiteMultipart {
    * @param max_uploads Maximum number of multipart uploads to obtain, per page.
    * @param is_truncated Whether the results have been truncated due to
    * pagination.
-   * @return std::optional<std::vector<DBOPMultipart>>
+   * @return std::optional<std::vector<DBMultipart>>
    */
-  std::vector<DBOPMultipart> list_multiparts_by_bucket_id(
+  std::vector<DBMultipart> list_multiparts_by_bucket_id(
       const std::string& bucket_id, const std::string& prefix,
       const std::string& marker, const std::string& delim,
       const int& max_uploads, bool* is_truncated, bool get_all
@@ -90,8 +89,7 @@ class SQLiteMultipart {
    * @param upload_id The Multipart Upload's ID to obtain.
    * @return Multipart Upload entry, or `nullopt` if not found.
    */
-  std::optional<DBOPMultipart> get_multipart(const std::string& upload_id
-  ) const;
+  std::optional<DBMultipart> get_multipart(const std::string& upload_id) const;
 
   /**
    * @brief Get the converted Multipart entry from the database.
@@ -99,7 +97,7 @@ class SQLiteMultipart {
    * @param id The Multipart Upload's ID to obtain.
    * @return Multipart Upload entry, or `nullopt` if not found.
    */
-  std::optional<DBOPMultipart> get_multipart(int id) const;
+  std::optional<DBMultipart> get_multipart(int id) const;
 
   /**
    * @brief Insert a new Multipart Upload entry into the database.
@@ -107,7 +105,7 @@ class SQLiteMultipart {
    * @param mp The Multipart Upload to insert.
    * @return The new entry's ID.
    */
-  uint insert(const DBOPMultipart& mp) const;
+  uint insert(const DBMultipart& mp) const;
 
   /**
    * @brief Obtains a vector of DB multipart part entries.
@@ -128,7 +126,7 @@ class SQLiteMultipart {
    * @brief Obtains a vector of a multipart upload's parts, ordered by part num.
    *
    * @param upload_id The upload id for which to obtain parts.
-   * @return std::vector<DBOPMultipartPart>
+   * @return std::vector<DBMultipartPart>
    */
   std::vector<DBMultipartPart> get_parts(const std::string& upload_id) const;
 
