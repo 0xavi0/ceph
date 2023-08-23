@@ -126,10 +126,13 @@ jobs:
           set -x
 
           docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /run/docker.sock:/run/docker.sock \
             -v ${GITHUB_WORKSPACE}/s3tr-out:/out \
             ghcr.io/aquarist-labs/s3tr:latest \
-            run --image s3gw:${IMAGE_TAG} /out/s3tr.json
+            run \
+            --image s3gw:${IMAGE_TAG} \
+            --docker-api unix:///run/docker.sock \
+            /out/s3tr.json
 
       - name: Archive Results
         uses: actions/upload-artifact@v3
