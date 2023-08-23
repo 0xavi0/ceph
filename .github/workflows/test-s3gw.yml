@@ -15,6 +15,8 @@ on:
 env:
   CMAKE_BUILD_TYPE: Debug
   NPROC: 16
+  # Note: max 128 chars according to OCI Distribution Spec
+  IMAGE_TAG: ${{ github.workflow_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
 jobs:
   tests:
@@ -54,13 +56,13 @@ jobs:
             --build-arg CMAKE_BUILD_TYPE=Debug \
             --build-arg NPROC=16 \
             --file s3gw/Dockerfile \
-            --tag s3gw-unittests \
+            --tag s3gw-unittests:${IMAGE_TAG} \
             --target s3gw-unittests \
             .
 
       - name: Run Unittests
         run: |
-          docker run --rm s3gw-unittests
+          docker run --rm s3gw-unittests:${IMAGE_TAG}
 
       - name: Build s3gw Container Image
         run: |
@@ -68,7 +70,7 @@ jobs:
             --build-arg CMAKE_BUILD_TYPE=Debug \
             --build-arg NPROC=16 \
             --file s3gw/Dockerfile \
-            --tag s3gw \
+            --tag s3gw:${IMAGE_TAG} \
             .
 
       - name: Run Integration tests
@@ -82,7 +84,7 @@ jobs:
           CONTAINER=$(docker run --rm -d \
             -p 7480:7480 \
             -v $GITHUB_WORKSPACE/integration/storage:/data \
-            s3gw \
+            s3gw:${IMAGE_TAG} \
               --rgw-backend-store sfs \
               --debug-rgw 1 \
               --rgw-lc-debug-interval 10)
@@ -107,7 +109,7 @@ jobs:
           CONTAINER=$(docker run --rm -d \
             -p 7480:7480 \
             -v $GITHUB_WORKSPACE/smoke/storage:/data \
-            s3gw \
+            s3gw:${IMAGE_TAG} \
               --rgw-backend-store sfs \
               --debug-rgw 1)
 
@@ -127,7 +129,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v ${GITHUB_WORKSPACE}/s3tr-out:/out \
             ghcr.io/aquarist-labs/s3tr:latest \
-            run --image s3gw /out/s3tr.json
+            run --image s3gw:${IMAGE_TAG} /out/s3tr.json
 
       - name: Archive Results
         uses: actions/upload-artifact@v3
