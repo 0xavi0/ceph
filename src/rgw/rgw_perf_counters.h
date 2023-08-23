@@ -10,6 +10,8 @@ extern PerfCounters *perfcounter;
 extern PerfCounters *perfcounter_ops;
 extern PerfCounters *perfcounter_ops_svc_time_hist;
 extern PerfCounters *perfcounter_ops_svc_time_sum;
+extern PerfCounters *perfcounter_prom_time_hist;
+extern PerfCounters *perfcounter_prom_time_sum;
 extern PerfHistogramCommon::axis_config_d perfcounter_op_hist_x_axis_config;
 extern PerfHistogramCommon::axis_config_d perfcounter_op_hist_y_axis_config;
 
@@ -67,4 +69,10 @@ enum {
   l_rgw_sfs_sqlite_retry_failed_count,
 
   l_rgw_last,
+};
+
+enum {
+  l_rgw_prom_first = 25000,
+  l_rgw_prom_sfs_sqlite_profile,
+  l_rgw_prom_last,
 };

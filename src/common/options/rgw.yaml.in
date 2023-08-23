@@ -3829,6 +3829,17 @@ options:
   level: advanced
   default: false
   desc:
-    Set up SQL query profiling using RGW logger.
+    Enable SFS SQLite profiling.
+    Logs with debug level prefixed "[SQLITE PROFILE]".
+    Logs slow queries with high level prefixed "[SQLITE SLOW QUERY]".
+    Makes data available in sfs_sqlite_profile Prometheus-style performane counter.
+  service:
+    - rgw
+- name: rgw_sfs_sqlite_profile_slowlog_time
+  type: millisecs
+  level: advanced
+  default: 20
+  desc:
+    Threshold to log slow queries with high log level.
   service:
     - rgw

@@ -15,6 +15,10 @@ PerfCounters *perfcounter_ops_svc_time_hist = nullptr;
 // RGW operation service time sums
 PerfCounters *perfcounter_ops_svc_time_sum = nullptr;
 
+// Collection of prometheus style histogram metrics
+PerfCounters *perfcounter_prom_time_hist = nullptr;
+PerfCounters *perfcounter_prom_time_sum = nullptr;
+
 PerfHistogramCommon::axis_config_d perfcounter_op_hist_x_axis_config{
     "Latency (µs)",
     PerfHistogramCommon::SCALE_LOG2, // Latency in logarithmic scale
@@ -88,6 +92,23 @@ int rgw_perf_start(CephContext *cct)
   plb.add_u64_counter(l_rgw_sfs_sqlite_retry_retried_count, "sfs_retry_retried_count", "Number of transactions succeeded after retry");
   plb.add_u64_counter(l_rgw_sfs_sqlite_retry_failed_count, "sfs_retry_failed_count", "Number of yransactions failed after retry");
 
+  PerfCountersBuilder prom_plb_hist(
+      cct, "rgw_prom_hist", l_rgw_prom_first, l_rgw_prom_last
+  );
+  PerfCountersBuilder prom_plb_sum(
+      cct, "rgw_prom_hist", l_rgw_prom_first, l_rgw_prom_last
+  );
+
+  prom_plb_sum.add_time(
+      l_rgw_prom_sfs_sqlite_profile, "sfs_sqlite_profile",
+      "Sum of SQLite query profile time"
+  );
+  prom_plb_hist.add_u64_counter_histogram(
+      l_rgw_prom_sfs_sqlite_profile, "sfs_sqlite_profile",
+      perfcounter_op_hist_x_axis_config, perfcounter_op_hist_y_axis_config,
+      "Histogram of SQLite Query time in µs"
+  );
+
   PerfCountersBuilder op_plb(cct, "rgw_op", RGW_OP_UNKNOWN-1, RGW_OP_LAST);
   PerfCountersBuilder op_plb_svc_hist(cct, "rgw_op_svc_time", RGW_OP_UNKNOWN-1, RGW_OP_LAST);
   PerfCountersBuilder op_plb_svc_sum(cct, "rgw_op_svc_time", RGW_OP_UNKNOWN-1, RGW_OP_LAST);
@@ -102,7 +123,7 @@ int rgw_perf_start(CephContext *cct)
 
     op_plb_svc_sum.add_time(i, rgw_op_type_str(static_cast<RGWOpType>(i)));
   }
-  
+
   perfcounter = plb.create_perf_counters();
   cct->get_perfcounters_collection()->add(perfcounter);
   perfcounter_ops = op_plb.create_perf_counters();
@@ -111,7 +132,10 @@ int rgw_perf_start(CephContext *cct)
   cct->get_perfcounters_collection()->add(perfcounter_ops_svc_time_hist);
   perfcounter_ops_svc_time_sum = op_plb_svc_sum.create_perf_counters();
   cct->get_perfcounters_collection()->add(perfcounter_ops_svc_time_sum);
-
+  perfcounter_prom_time_hist = prom_plb_hist.create_perf_counters();
+  cct->get_perfcounters_collection()->add(perfcounter_prom_time_hist);
+  perfcounter_prom_time_sum = prom_plb_sum.create_perf_counters();
+  cct->get_perfcounters_collection()->add(perfcounter_prom_time_sum);
   return 0;
 }
 

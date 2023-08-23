@@ -13,7 +13,9 @@
  */
 #pragma once
 
+#include <common/ceph_time.h>
 #include <sqlite3.h>
+#include <utime.h>
 
 #include <filesystem>
 #include <ios>
@@ -25,6 +27,7 @@
 #include "common/dout.h"
 #include "lifecycle/lifecycle_definitions.h"
 #include "objects/object_definitions.h"
+#include "rgw/rgw_perf_counters.h"
 #include "sqlite_orm.h"
 #include "users/users_definitions.h"
 #include "versioned_object/versioned_object_definitions.h"
@@ -258,28 +261,43 @@ static void sqlite_error_callback(void* ctx, int error_code, const char* msg) {
 }
 
 static int sqlite_profile_callback(
-    unsigned int reason, void* ctx, void* vstatement, void* runtime_ns
+    unsigned int reason, void* ctx, void* vstatement, void* runtime_ptr
 ) {
   const auto cct = static_cast<CephContext*>(ctx);
+  const static std::chrono::milliseconds slowlog_time =
+      cct->_conf.get_val<std::chrono::milliseconds>(
+          "rgw_sfs_sqlite_profile_slowlog_time"
+      );
 
   if (reason == SQLITE_TRACE_PROFILE) {
-    const int64_t runtime = *static_cast<int64_t*>(runtime_ns) / 1000 / 1000;
+    const uint64_t runtime_ns = *static_cast<uint64_t*>(runtime_ptr);
+    const int64_t runtime_ms = runtime_ns / 1000 / 1000;
     sqlite3_stmt* statement = static_cast<sqlite3_stmt*>(vstatement);
     const std::unique_ptr<char, void (*)(char*)> sql(
         sqlite3_expanded_sql(statement),
         [](char* p) { sqlite3_free(static_cast<void*>(p)); }
     );
     const sqlite3* db = sqlite3_db_handle(statement);
+    const char* sql_str = sql ? sql.get() : sqlite3_sql(statement);
 
-    if (sql) {
-      lderr(cct) << "[SQLITE PROFILE] " << std::hex << db << " " << runtime
-                 << "ms "
-                 << "\"" << sql.get() << "\"" << dendl;
-    } else {
-      lderr(cct) << "[SQLITE PROFILE] " << std::hex << db << " " << runtime
-                 << "ms "
-                 << "\"" << sqlite3_sql(statement) << "\"" << dendl;
+    if (runtime_ms > slowlog_time.count()) {
+      lsubdout(cct, rgw, 1) << fmt::format(
+                                   "[SQLITE SLOW QUERY] {} {:L}ms {}",
+                                   fmt::ptr(db), runtime_ms, sql_str
+                               )
+                            << dendl;
     }
+    lsubdout(cct, rgw, 20) << fmt::format(
+                                  "[SQLITE PROFILE] {} {:L}ms {}", fmt::ptr(db),
+                                  runtime_ms, sql_str
+                              )
+                           << dendl;
+    perfcounter_prom_time_hist->hinc(
+        l_rgw_prom_sfs_sqlite_profile, runtime_ns, 1
+    );
+    perfcounter_prom_time_sum->tinc(
+        l_rgw_prom_sfs_sqlite_profile, timespan(runtime_ns)
+    );
   }
 
   return 0;
