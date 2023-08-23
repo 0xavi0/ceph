@@ -23,6 +23,7 @@
 #include "rgw/driver/sfs/fmt.h"
 #include "rgw/driver/sfs/multipart_types.h"
 #include "rgw/driver/sfs/sqlite/buckets/multipart_definitions.h"
+#include "rgw_obj_manifest.h"
 #include "rgw_sal_sfs.h"
 #include "writer.h"
 
@@ -473,6 +474,24 @@ int SFSMultipartUploadV2::complete(
                           )
                        << dendl;
     return -ERR_INTERNAL_ERROR;
+  }
+
+  // Server-side encryption: The decryptor needs a manifest to
+  // identify encrypted chunks. Each MP part corresponds to a chunk.
+  if (mp->attrs.find(RGW_ATTR_CRYPT_MODE) != mp->attrs.end()) {
+    map<uint64_t, RGWObjManifestPart> chunks;
+    uint64_t bytes_so_far = 0;
+    for (const auto& [part_num, part] : to_complete) {
+      RGWObjManifestPart chunk;
+      chunk.loc = rgw_obj(bucketref->get_bucket(), mp->object_name);
+      chunk.loc_ofs = bytes_so_far;
+      chunk.size = part.size;
+      chunks[bytes_so_far] = chunk;
+      bytes_so_far += part.size;
+    }
+    RGWObjManifest manifest;
+    manifest.set_explicit(bytes_so_far, chunks);
+    encode(manifest, mp->attrs[RGW_ATTR_MANIFEST]);
   }
 
   objref->update_attrs(mp->attrs);
