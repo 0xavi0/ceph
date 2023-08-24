@@ -18,9 +18,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <filesystem>
 #include <sstream>
 #include <system_error>
 #include <thread>
+#include <tuple>
 
 #include "cls/rgw/cls_rgw_client.h"
 #include "common/Clock.h"
@@ -506,6 +508,74 @@ void SFStore::filesystem_stats_updater_main(
       break;
     }
   }
+}
+
+std::vector<std::function<MetricsStatusPage::ScalarMetricFunction>>
+SFStore::custom_metric_fns() {
+  sqlite3* sqlite_db = db_conn->first_sqlite_conn;
+  auto make_sqlite3_status_fn = [&](const std::string& name, int op,
+                                    bool use_highwater = false) {
+    return [sqlite_db, op, use_highwater, name]() {
+      int current;
+      int highwater;
+      int ret = SQLITE_ERROR;
+      if (sqlite_db) {
+        ret = sqlite3_db_status(sqlite_db, op, &current, &highwater, false);
+      }
+      if (ret != SQLITE_OK) {
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, name, std::nan("error")
+        );
+      }
+      return std::make_tuple(
+          perfcounter_type_d::PERFCOUNTER_U64, name,
+          static_cast<double>(use_highwater ? highwater : current)
+      );
+    };
+  };
+
+  std::vector<std::function<MetricsStatusPage::ScalarMetricFunction>> fns{
+      make_sqlite3_status_fn(
+          "sfs_sqlite_memory_used_bytes", SQLITE_STATUS_MEMORY_USED
+      ),
+      make_sqlite3_status_fn(
+          "sfs_sqlite_malloc_max_bytes", SQLITE_STATUS_MALLOC_SIZE, true
+      ),
+      make_sqlite3_status_fn(
+          "sfs_sqlite_malloc_count", SQLITE_STATUS_MALLOC_COUNT
+      ),
+      [&]() {
+        std::error_code ec;
+        const auto size =
+            std::filesystem::file_size(db_conn->get_storage().filename(), ec);
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, "sfs_sqlite_db_bytes",
+            ec ? std::nan("error") : static_cast<double>(size)
+        );
+      },
+      [&]() {
+        std::filesystem::path path(db_conn->get_storage().filename());
+        path.replace_extension("db-wal");
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(path, ec);
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, "sfs_sqlite_db_wal_bytes",
+            ec ? std::nan("error") : static_cast<double>(size)
+        );
+      },
+      [&]() {
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, "sfs_filesystem_total_bytes",
+            static_cast<double>(filesystem_stats_total_bytes)
+        );
+      },
+      [&]() {
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, "sfs_filesystem_avail_bytes",
+            static_cast<double>(filesystem_stats_avail_bytes)
+        );
+      }};
+  return fns;
 }
 
 SFStore::SFStore(CephContext* c, const std::filesystem::path& data_path)

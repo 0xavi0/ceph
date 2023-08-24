@@ -149,6 +149,9 @@ class SFStore : public StoreDriver {
     return std::make_unique<SFSStatusPage>(this);
   }
 
+  std::vector<std::function<MetricsStatusPage::ScalarMetricFunction>>
+  custom_metric_fns();
+
   void filesystem_stats_updater_main(std::chrono::milliseconds update_interval);
 
   virtual const std::string get_name() const override { return "sfs"; }
