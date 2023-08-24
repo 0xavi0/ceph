@@ -247,7 +247,7 @@ void DBConn::maybe_upgrade_metadata() {
     storage.pragma.user_version(SFS_METADATA_VERSION);
   } else if (db_version < SFS_METADATA_VERSION && db_version >= SFS_METADATA_MIN_VERSION) {
     // perform schema update
-    upgrade_metadata(cct, storage, sqlite_db);
+    upgrade_metadata(cct, storage, first_sqlite_conn);
   } else if (db_version < SFS_METADATA_MIN_VERSION) {
     throw sqlite_sync_exception(
         "Existing metadata too far behind! Unable to upgrade schema!"

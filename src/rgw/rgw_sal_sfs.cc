@@ -399,7 +399,7 @@ http::status SFSStatusPage::render(std::ostream& os) {
   os << "</ul>\n";
 
   auto db = sfs->db_conn->get_storage();
-  sqlite3* sqlite_db = sfs->db_conn->sqlite_db;
+  sqlite3* sqlite_db = sfs->db_conn->first_sqlite_conn;
 
   os << "<h2>SQLite</h2>\n"
      << "<ul>\n"

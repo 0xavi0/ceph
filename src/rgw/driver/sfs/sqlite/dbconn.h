@@ -308,17 +308,20 @@ class DBConn {
   Storage storage;
 
  public:
-  sqlite3* sqlite_db;
+  sqlite3* first_sqlite_conn;
   CephContext* const cct;
   const bool profile_enabled;
 
   DBConn(CephContext* _cct)
       : storage(_make_storage(getDBPath(_cct))),
+        first_sqlite_conn(nullptr),
         cct(_cct),
         profile_enabled(_cct->_conf.get_val<bool>("rgw_sfs_sqlite_profile")) {
     sqlite3_config(SQLITE_CONFIG_LOG, &sqlite_error_callback, cct);
     storage.on_open = [this](sqlite3* db) {
-      sqlite_db = db;
+      if (first_sqlite_conn == nullptr) {
+        first_sqlite_conn = db;
+      }
 
       sqlite3_extended_result_codes(db, 1);
       sqlite3_busy_timeout(db, 10000);
