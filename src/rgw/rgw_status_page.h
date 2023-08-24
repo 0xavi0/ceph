@@ -16,6 +16,8 @@
 #ifndef RGW_STATUS_PAGE_H
 #define RGW_STATUS_PAGE_H
 
+#include <common/perf_counters.h>
+
 #include <boost/beast/http.hpp>
 #include <boost/beast/http/status.hpp>
 #include <iostream>
@@ -35,10 +37,23 @@ class StatusPage {
   virtual http::status render(std::ostream& os) = 0;
 };
 
-class PerfCounterStatusPage : public StatusPage {
- private:
-  const PerfCountersCollection* perf_counters;
+class MetricsStatusPage : public StatusPage {
+ public:
+  using ScalarMetricFunction =
+      std::tuple<perfcounter_type_d, std::string, double>(void);
 
+ protected:
+  const PerfCountersCollection* perf_counters;
+  std::vector<std::function<ScalarMetricFunction>> custom_metrics;
+
+  MetricsStatusPage(const PerfCountersCollection* perf_counters);
+  virtual ~MetricsStatusPage() override;
+
+ public:
+  void add_custom_metric_fn(const std::function<ScalarMetricFunction>& fn);
+};
+
+class PerfCounterStatusPage : public MetricsStatusPage {
  public:
   PerfCounterStatusPage(const PerfCountersCollection* perf_counters);
   virtual ~PerfCounterStatusPage() override;
@@ -48,10 +63,7 @@ class PerfCounterStatusPage : public StatusPage {
   http::status render(std::ostream& os) override;
 };
 
-class PrometheusStatusPage : public StatusPage {
- private:
-  const PerfCountersCollection* perf_counters;
-
+class PrometheusStatusPage : public MetricsStatusPage {
  public:
   PrometheusStatusPage(const PerfCountersCollection* perf_counters);
   virtual ~PrometheusStatusPage() override;

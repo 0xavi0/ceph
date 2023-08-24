@@ -34,10 +34,22 @@
 #include "rgw_perf_counters.h"
 using namespace fmt::literals;
 
+MetricsStatusPage::MetricsStatusPage(const PerfCountersCollection* perf_counters
+)
+    : perf_counters(perf_counters) {}
+
+MetricsStatusPage::~MetricsStatusPage() {}
+
+void MetricsStatusPage::add_custom_metric_fn(
+    const std::function<ScalarMetricFunction>& fn
+) {
+  custom_metrics.emplace_back(fn);
+}
+
 PerfCounterStatusPage::PerfCounterStatusPage(
     const PerfCountersCollection* perf_counters
 )
-    : perf_counters(perf_counters) {}
+    : MetricsStatusPage(perf_counters) {}
 
 PerfCounterStatusPage::~PerfCounterStatusPage() {}
 
@@ -240,6 +252,26 @@ http::status PerfCounterStatusPage::render(std::ostream& os) {
       }
   );
 
+  for (const auto& fn : custom_metrics) {
+    const auto data = fn();
+    fmt::print(
+        os, R"(
+<tr>
+  <td>{path}</td>
+  <td></td>
+  <td>{type}</td>
+  <td>{value_type}</td>
+  <td></td>
+  <td>{value}</td>
+</tr>
+)",
+        "path"_a = std::get<1>(data),
+        "type"_a = metric_type_human(std::get<0>(data)),
+        "value_type"_a = metric_value_type_human(std::get<0>(data)),
+        "value"_a = std::get<2>(data)
+    );
+  }
+
   os << R"(
 </tbody>
 </table>
@@ -261,7 +293,7 @@ constexpr const char* metric_type_prom(perfcounter_type_d type) {
 PrometheusStatusPage::PrometheusStatusPage(
     const PerfCountersCollection* perf_counters
 )
-    : perf_counters(perf_counters) {}
+    : MetricsStatusPage(perf_counters) {}
 
 PrometheusStatusPage::~PrometheusStatusPage() {}
 
@@ -414,5 +446,20 @@ http::status PrometheusStatusPage::render(std::ostream& os) {
         }
       }
   );
+  for (const auto& fn : custom_metrics) {
+    const auto data = fn();
+    fmt::print(
+        os, R"(
+# HELP {name} ({human_type} {human_value_type})
+# TYPE {name} {type}
+{name} {value}
+)",
+        "name"_a = std::get<1>(data),
+        "human_type"_a = metric_type_human(std::get<0>(data)),
+        "human_value_type"_a = metric_value_type_human(std::get<0>(data)),
+        "type"_a = metric_type_prom(std::get<0>(data)),
+        "value"_a = std::get<2>(data)
+    );
+  }
   return http::status::ok;
 }
