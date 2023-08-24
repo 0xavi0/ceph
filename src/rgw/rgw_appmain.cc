@@ -45,6 +45,7 @@
 #include "rgw_rest_config.h"
 #include "rgw_rest_realm.h"
 #include "rgw_rest_ratelimit.h"
+#include "rgw_status_page.h"
 #include "rgw_status_page_telemetry.h"
 #include "rgw_swift_auth.h"
 #include "rgw_log.h"
@@ -452,19 +453,14 @@ int rgw::AppMain::init_frontends2(RGWLib* rgwlib)
       continue;
 #endif
     }
-    else if (framework == "status") {   
-      auto cct = dpp->get_cct();   
+    else if (framework == "status") {
+      auto cct = dpp->get_cct();
       RGWStatusFrontend* stat = new RGWStatusFrontend(env, config, cct);
-      stat->register_status_page(
-        std::make_unique<PerfCounterStatusPage>(
-          cct->get_perfcounters_collection()
-        )
-      );
-      stat->register_status_page(
-        std::make_unique<PrometheusStatusPage>(
-          cct->get_perfcounters_collection()
-        )
-      );
+      auto perf_counters = std::make_unique<PerfCounterStatusPage>(
+          cct->get_perfcounters_collection());
+      auto prometheus = std::make_unique<PrometheusStatusPage>(
+	  cct->get_perfcounters_collection());
+
       if (env.s3gw_telemetry) {
 	stat->register_status_page(
 	    std::make_unique<TelemetryStatusPage>(cct, *env.s3gw_telemetry));
@@ -472,8 +468,14 @@ int rgw::AppMain::init_frontends2(RGWLib* rgwlib)
       auto driver = env.driver;
       if (driver && driver->get_name() == "sfs") {
         auto sfs = dynamic_cast<rgw::sal::SFStore*>(driver);
-	      stat->register_status_page(sfs->make_status_page());
+	stat->register_status_page(sfs->make_status_page());
+	for (const auto& fn : sfs->custom_metric_fns()) {
+	  perf_counters->add_custom_metric_fn(fn);
+	  prometheus->add_custom_metric_fn(fn);
+	}
       }
+      stat->register_status_page(std::move(perf_counters));
+      stat->register_status_page(std::move(prometheus));
       fe = stat;
     }
 
