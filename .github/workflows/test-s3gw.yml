@@ -132,6 +132,7 @@ jobs:
             run \
             --image s3gw:${IMAGE_TAG} \
             --docker-api unix:///run/docker.sock \
+            --nproc 10 \
             /out/s3tr.json
 
       - name: Archive Results
