@@ -138,7 +138,7 @@ jobs:
       - name: Archive Results
         uses: actions/upload-artifact@v3
         with:
-          name: s3tests-results-${{ github.ref_name }}
+          name: s3tests-results-${{ github.workflow_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: s3tr-out/s3tr.json
 
       - name: Analyze Results
