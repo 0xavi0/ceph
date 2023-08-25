@@ -388,7 +388,7 @@ bool Bucket::_undelete_object(
     if (!key.instance.empty() && (key.instance == last_version.version_id)) {
       // remove the delete marker and get the previous version in a transaction
       sqlite_versioned_objects.delete_version_and_get_previous_transact(
-          last_version.id
+          last_version.object_id, last_version.id
       );
     }
   }

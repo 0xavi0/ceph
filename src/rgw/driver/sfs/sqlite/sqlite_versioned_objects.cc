@@ -15,6 +15,7 @@
 
 #include <sqlite_orm/sqlite_orm.h>
 
+#include <optional>
 #include <stdexcept>
 #include <system_error>
 
@@ -293,39 +294,32 @@ SQLiteVersionedObjects::get_last_versioned_object(
 }
 
 std::optional<DBVersionedObject>
-SQLiteVersionedObjects::delete_version_and_get_previous_transact(uint id
+SQLiteVersionedObjects::delete_version_and_get_previous_transact(
+    const uuid_d& object_id, uint id
 ) const {
   try {
     auto storage = conn->get_storage();
     auto transaction = storage.transaction_guard();
-    auto version = storage.get_pointer<DBVersionedObject>(id);
-    std::optional<DBVersionedObject> ret_value;
-    if (version != nullptr) {
-      auto object_id = version->object_id;
-      storage.remove<DBVersionedObject>(id);
+    std::optional<DBVersionedObject> ret_value = std::nullopt;
+    storage.remove<DBVersionedObject>(id);
+    if (storage.changes()) {
       // get the last version of the object now
-      auto max_commit_time_ids = storage.select(
-          columns(&DBVersionedObject::id, max(&DBVersionedObject::commit_time)),
+      auto last_version_select = storage.get_all<DBVersionedObject>(
           where(
               is_equal(&DBVersionedObject::object_id, object_id) and
               is_not_equal(
                   &DBVersionedObject::object_state, ObjectState::DELETED
               )
           ),
-          group_by(&DBVersionedObject::id),
-          order_by(&DBVersionedObject::id).desc()
+          multi_order_by(
+              order_by(&DBVersionedObject::version_type).desc(),
+              order_by(&DBVersionedObject::commit_time).desc(),
+              order_by(&DBVersionedObject::id).desc()
+          ),
+          limit(1)
       );
-      auto found_value = max_commit_time_ids.size() &&
-                         std::get<1>(max_commit_time_ids[0]) != nullptr;
-      if (found_value) {
-        // if not value is found could be, for example, if lifecycle deleted all
-        // non current versions before.
-        auto last_version_id = std::get<0>(max_commit_time_ids[0]);
-        auto last_version =
-            storage.get_pointer<DBVersionedObject>(last_version_id);
-        if (last_version) {
-          ret_value = *last_version;
-        }
+      if (!last_version_select.empty()) {
+        ret_value = last_version_select[0];
       }
       transaction.commit();
     }
@@ -345,34 +339,31 @@ uint SQLiteVersionedObjects::add_delete_marker_transact(
   try {
     auto storage = conn->get_storage();
     auto transaction = storage.transaction_guard();
-    auto max_commit_time_ids = storage.select(
-        columns(&DBVersionedObject::id, max(&DBVersionedObject::commit_time)),
+    auto last_version_select = storage.get_all<DBVersionedObject>(
         where(
             is_equal(&DBVersionedObject::object_id, object_id) and
             is_not_equal(&DBVersionedObject::object_state, ObjectState::DELETED)
         ),
-        group_by(&DBVersionedObject::id),
-        order_by(&DBVersionedObject::id).desc()
+        multi_order_by(
+            order_by(&DBVersionedObject::version_type).desc(),
+            order_by(&DBVersionedObject::commit_time).desc(),
+            order_by(&DBVersionedObject::id).desc()
+        ),
+        limit(1)
     );
-    // if found, value we are looking for is in the first position of the results
-    // because we ordered descending in the query
-    auto found_value = max_commit_time_ids.size() &&
-                       std::get<1>(max_commit_time_ids[0]) != nullptr;
-    if (found_value) {
-      auto last_version_id = std::get<0>(max_commit_time_ids[0]);
-      auto last_version =
-          storage.get_pointer<DBVersionedObject>(last_version_id);
-      if (last_version &&
-          (last_version->object_state == ObjectState::COMMITTED ||
-           last_version->object_state == ObjectState::OPEN) &&
-          last_version->version_type == VersionType::REGULAR) {
+
+    if (!last_version_select.empty()) {
+      auto last_version = last_version_select[0];
+      if ((last_version.object_state == ObjectState::COMMITTED ||
+           last_version.object_state == ObjectState::OPEN) &&
+          last_version.version_type == VersionType::REGULAR) {
         auto now = ceph::real_clock::now();
-        last_version->version_type = VersionType::DELETE_MARKER;
-        last_version->object_state = ObjectState::COMMITTED;
-        last_version->delete_time = now;
-        last_version->mtime = now;
-        last_version->version_id = delete_marker_id;
-        ret_id = storage.insert(*last_version);
+        last_version.version_type = VersionType::DELETE_MARKER;
+        last_version.object_state = ObjectState::COMMITTED;
+        last_version.delete_time = now;
+        last_version.mtime = now;
+        last_version.version_id = delete_marker_id;
+        ret_id = storage.insert(last_version);
         added = true;
         // only commit if the delete maker was indeed inserted.
         // the rest of calls in this transaction are read operations
@@ -426,8 +417,9 @@ SQLiteVersionedObjects::get_committed_versioned_object_last_version(
   // we don't have a version_id, so return the last available one that is
   // committed
   auto storage = conn->get_storage();
-  auto max_commit_time_ids = storage.select(
-      columns(&DBVersionedObject::id, max(&DBVersionedObject::commit_time)),
+  std::optional<DBVersionedObject> ret_value = std::nullopt;
+  auto last_version_id = storage.select(
+      &DBVersionedObject::id,
       inner_join<DBObject>(
           on(is_equal(&DBObject::uuid, &DBVersionedObject::object_id))
       ),
@@ -436,16 +428,16 @@ SQLiteVersionedObjects::get_committed_versioned_object_last_version(
           is_equal(&DBObject::name, object_name) and
           is_equal(&DBVersionedObject::object_state, ObjectState::COMMITTED)
       ),
-      group_by(&DBVersionedObject::id), order_by(&DBVersionedObject::id).desc()
+      multi_order_by(
+          order_by(&DBVersionedObject::version_type).desc(),
+          order_by(&DBVersionedObject::commit_time).desc(),
+          order_by(&DBVersionedObject::id).desc()
+      ),
+      limit(1)
   );
-  auto found_value = max_commit_time_ids.size() &&
-                     std::get<1>(max_commit_time_ids[0]) != nullptr;
-  std::optional<DBVersionedObject> ret_value;
-  if (found_value) {
-    // if not value is found could be, for example, if lifecycle deleted all
-    // non current versions before.
-    auto last_version_id = std::get<0>(max_commit_time_ids[0]);
-    auto last_version = storage.get_pointer<DBVersionedObject>(last_version_id);
+  if (!last_version_id.empty()) {
+    auto last_version =
+        storage.get_pointer<DBVersionedObject>(last_version_id[0]);
     if (last_version) {
       ret_value = *last_version;
     }
