@@ -29,6 +29,7 @@
 #include "common/Formatter.h"
 #include "common/perf_counters.h"
 #include "common/perf_histogram.h"
+#include "include/ceph_assert.h"
 #include "rgw_op_type.h"
 #include "rgw_perf_counters.h"
 using namespace fmt::literals;
@@ -143,7 +144,8 @@ http::status PerfCounterStatusPage::render(std::ostream& os) {
             if (is_histogram(data.type)) {
               std::ostringstream os;
               // we know the axis of this one
-              if (&perf_counters == perfcounter_ops_svc_time_hist) {
+              if (&perf_counters == perfcounter_ops_svc_time_hist ||
+                  &perf_counters == perfcounter_prom_time_hist) {
                 os << "<table><tr>\n";
                 const PerfHistogramCommon::axis_config_d ac =
                     perfcounter_op_hist_x_axis_config;
@@ -286,7 +288,8 @@ http::status PrometheusStatusPage::render(std::ostream& os) {
             continue;
           }
           // accessed when printing service time histograms
-          if (perf_counters == perfcounter_ops_svc_time_sum) {
+          if (perf_counters == perfcounter_ops_svc_time_sum ||
+              perf_counters == perfcounter_prom_time_sum) {
             continue;
           }
           std::string name(path);
@@ -349,9 +352,17 @@ http::status PrometheusStatusPage::render(std::ostream& os) {
           }
 
           // 1D ceph perf histogram + time counter -> prometheus histogram
-          if (perf_counters == perfcounter_ops_svc_time_hist) {
-            name = collection;
-
+          if (perf_counters == perfcounter_ops_svc_time_hist ||
+              perf_counters == perfcounter_prom_time_hist) {
+            const PerfCounters* sum_counters = [&]() {
+              if (perf_counters == perfcounter_ops_svc_time_hist) {
+                return perfcounter_ops_svc_time_sum;
+              } else if (perf_counters == perfcounter_prom_time_hist) {
+                return perfcounter_prom_time_sum;
+              } else {
+                ceph_abort("should not happen");
+              }
+            }();
             const PerfHistogramCommon::axis_config_d ac =
                 perfcounter_op_hist_x_axis_config;
 
@@ -379,7 +390,7 @@ http::status PrometheusStatusPage::render(std::ostream& os) {
             }
 
             // XXX histogram buckets may be any time resolution. This has to match
-            const auto sum = perfcounter_ops_svc_time_sum->tget(data.idx);
+            const auto sum = sum_counters->tget(data.idx);
             const auto str_labels = format_labels(labels);
             fmt::print(os, "{}_sum{} {}\n", name, str_labels, sum.usec());
             fmt::print(os, "{}_count{} {}\n\n", name, str_labels, count);
