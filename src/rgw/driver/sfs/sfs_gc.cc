@@ -13,6 +13,7 @@
  */
 #include "sfs_gc.h"
 
+#include <common/perf_counters.h>
 #include <driver/sfs/sqlite/buckets/multipart_definitions.h>
 
 #include <filesystem>
@@ -22,6 +23,7 @@
 #include "multipart_types.h"
 #include "rgw/driver/sfs/sqlite/sqlite_multipart.h"
 #include "rgw/driver/sfs/sqlite/sqlite_objects.h"
+#include "rgw/rgw_perf_counters.h"
 #include "rgw_obj_types.h"
 #include "sqlite/buckets/bucket_definitions.h"
 #include "sqlite/sqlite_versioned_objects.h"
@@ -44,31 +46,58 @@ SFSGC::~SFSGC() {
 int SFSGC::process() {
   // This is the method that does the garbage collection.
   initial_process_time = ceph_clock_now();
+  perfcounter->inc(l_rgw_sfs_gc_count);
 
   // start by deleting possible pending objects data in the filesystem
   // this could be stopped in a previous execution due to max exec time elapsed
   auto time_to_process_more = delete_pending_objects_data();
   if (!time_to_process_more) {
+    perfcounter->set(
+        l_rgw_sfs_gc_process_exit,
+        static_cast<uint64_t>(
+            sfs_gc_process_exit_state::delete_pending_objects_data
+        )
+    );
     return 0;
   }
   // now delete possible pending multiparts data
   time_to_process_more = delete_pending_multiparts_data();
   if (!time_to_process_more) {
+    perfcounter->set(
+        l_rgw_sfs_gc_process_exit,
+        static_cast<uint64_t>(
+            sfs_gc_process_exit_state::delete_pending_multiparts_data
+        )
+    );
     return 0;
   }
   // process deleted buckets
   time_to_process_more = process_deleted_buckets();
   if (!time_to_process_more) {
+    perfcounter->set(
+        l_rgw_sfs_gc_process_exit,
+        static_cast<uint64_t>(sfs_gc_process_exit_state::process_deleted_buckets
+        )
+    );
     return 0;
   }
   // process deleted objects
   time_to_process_more = process_deleted_objects();
   if (!time_to_process_more) {
+    perfcounter->set(
+        l_rgw_sfs_gc_process_exit,
+        static_cast<uint64_t>(sfs_gc_process_exit_state::process_deleted_objects
+        )
+    );
     return 0;
   }
 
   // process done or aborted multiparts
   time_to_process_more = process_done_and_aborted_multiparts();
+  perfcounter->set(
+      l_rgw_sfs_gc_process_exit,
+      static_cast<uint64_t>(sfs_gc_process_exit_state::finished)
+  );
   return 0;
 }
 
@@ -110,6 +139,7 @@ std::ostream& SFSGC::gen_prefix(std::ostream& out) const {
 }
 
 bool SFSGC::process_deleted_buckets() {
+  common::PerfGuard elapsed(perfcounter, l_rgw_sfs_gc_deleted_buckets_elapsed);
   // permanently delete removed buckets and their objects and versions
   sqlite::SQLiteBuckets db_buckets(store->db_conn);
   auto deleted_buckets = db_buckets.get_deleted_buckets_ids();
@@ -144,6 +174,7 @@ bool SFSGC::process_deleted_buckets() {
 }
 
 bool SFSGC::process_deleted_objects() {
+  common::PerfGuard elapsed(perfcounter, l_rgw_sfs_gc_deleted_objects_elapsed);
   bool more_objects = true;
   bool time_to_process_more = true;
   while (time_to_process_more && more_objects) {
@@ -167,6 +198,9 @@ bool SFSGC::process_deleted_objects_batch(bool& more_objects) {
 }
 
 bool SFSGC::process_done_and_aborted_multiparts() {
+  common::PerfGuard elapsed(
+      perfcounter, l_rgw_sfs_gc_done_aborted_multiparts_elapsed
+  );
   bool all_parts_deleted = false;
   bool time_to_process_more = true;
   while (time_to_process_more && !all_parts_deleted) {
@@ -192,6 +226,9 @@ bool SFSGC::process_done_and_aborted_multiparts_batch(bool& all_parts_deleted) {
 }
 
 bool SFSGC::delete_pending_objects_data() {
+  common::PerfGuard elapsed(
+      perfcounter, l_rgw_sfs_gc_pending_objects_data_elapsed
+  );
   // delete objects in a loop and check if the max process time has reached
   // for every object.
   if (pending_objects_to_delete.has_value()) {
@@ -211,6 +248,9 @@ bool SFSGC::delete_pending_objects_data() {
 }
 
 bool SFSGC::delete_pending_multiparts_data() {
+  common::PerfGuard elapsed(
+      perfcounter, l_rgw_sfs_gc_pending_multiparts_data_elapsed
+  );
   if (pending_multiparts_to_delete.has_value()) {
     // delete multiparts in a loop and check if the max process time has reached
     // for every part.
@@ -235,6 +275,9 @@ bool SFSGC::delete_pending_multiparts_data() {
 }
 
 bool SFSGC::abort_bucket_multiparts(const std::string& bucket_id) {
+  common::PerfGuard elapsed(
+      perfcounter, l_rgw_sfs_gc_abort_bucket_multiparts_elapsed
+  );
   sqlite::SQLiteMultipart db_mp(store->db_conn);
   int ret = db_mp.abort_multiparts_by_bucket_id(bucket_id);
   ceph_assert(ret >= 0);
@@ -288,6 +331,7 @@ void* SFSGC::GCWorker::entry() {
     lsfs_dout(dpp, 2) << "start" << dendl;
 
     if (!gc->suspended()) {
+      common::PerfGuard elapsed(perfcounter, l_rgw_sfs_gc_processing_time);
       int r = gc->process();
       if (r < 0) {
         lsfs_dout(

@@ -68,6 +68,16 @@ enum {
   l_rgw_sfs_sqlite_retry_retried_count,
   l_rgw_sfs_sqlite_retry_failed_count,
 
+  l_rgw_sfs_gc_count,
+  l_rgw_sfs_gc_processing_time,
+  l_rgw_sfs_gc_process_exit,
+  l_rgw_sfs_gc_pending_objects_data_elapsed,
+  l_rgw_sfs_gc_pending_multiparts_data_elapsed,
+  l_rgw_sfs_gc_deleted_buckets_elapsed,
+  l_rgw_sfs_gc_deleted_objects_elapsed,
+  l_rgw_sfs_gc_done_aborted_multiparts_elapsed,
+  l_rgw_sfs_gc_abort_bucket_multiparts_elapsed,
+
   l_rgw_last,
 };
 
@@ -76,3 +86,13 @@ enum {
   l_rgw_prom_sfs_sqlite_profile,
   l_rgw_prom_last,
 };
+
+enum class sfs_gc_process_exit_state : int {
+  delete_pending_objects_data = 1,
+  delete_pending_multiparts_data,
+  process_deleted_buckets,
+  process_deleted_objects,
+  finished,
+};
+
+std::ostream& operator<<(std::ostream& os, sfs_gc_process_exit_state state);

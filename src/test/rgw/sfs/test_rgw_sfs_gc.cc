@@ -23,12 +23,12 @@
 #include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
 #include "rgw/driver/sfs/sqlite/sqlite_users.h"
 #include "rgw/driver/sfs/uuid_path.h"
+#include "rgw/rgw_perf_counters.h"
 #include "rgw/rgw_sal_sfs.h"
 
 using namespace rgw::sal::sfs::sqlite;
 using namespace std::this_thread;
 using namespace std::chrono_literals;
-using std::chrono::system_clock;
 
 namespace fs = std::filesystem;
 const static std::string TEST_DIR = "rgw_sfs_tests";
@@ -36,9 +36,14 @@ const static std::string TEST_USERNAME = "test_user";
 
 class TestSFSGC : public ::testing::Test {
  protected:
+  const std::unique_ptr<CephContext> cct =
+      std::unique_ptr<CephContext>(new CephContext(CEPH_ENTITY_TYPE_ANY));
+
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
+    cct->_log->start();
+    rgw_perf_start(cct.get());
   }
 
   void TearDown() override {
