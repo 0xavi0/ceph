@@ -40,22 +40,18 @@ set(sfs_srcs
 
 add_library(sfs STATIC ${sfs_srcs})
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  target_compile_options(sfs PRIVATE
-    -Werror -Wextra
-    -Wunused-function
-    -Wunused-result
-    -Wshadow
-    -Wno-error=unused-parameter)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
-  target_compile_options(sfs PRIVATE
-    -Werror -Wextra
-    -Wunused-function
-    -Wunused-result
-    -Wshadow
-    -Wno-error=unused-parameter
-    -Wno-error=unqualified-std-cast-call)
-endif(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+target_compile_options(sfs PRIVATE
+  -Wall
+  -Werror
+  -Wextra
+  -Wpedantic
+  -pedantic-errors
+  -Wold-style-cast
+  -Wcast-align
+  -Wcast-qual
+  -Wformat
+  -Wredundant-decls
+  -Wswitch-default)
 
 # Mark ceph includes system to not see "our" warnings there
 target_include_directories(sfs
