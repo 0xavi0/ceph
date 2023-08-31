@@ -286,10 +286,10 @@ int SFSObject::copy_object(
     rgw::sal::Object* dst_object, rgw::sal::Bucket* dst_bucket,
     rgw::sal::Bucket* src_bucket, const rgw_placement_rule& /*dest_placement*/,
     ceph::real_time* /*src_mtime*/, ceph::real_time* /*mtime*/,
-    const ceph::real_time* /*mod_ptr*/, const ceph::real_time* /*unmod_ptr*/,
-    bool /*high_precision_time*/, const char* /*if_match*/,
-    const char* /*if_nomatch*/, AttrsMod /*attrs_mod*/, bool /*copy_if_newer*/,
-    Attrs& /*attrs*/, RGWObjCategory /*category*/, uint64_t /*olh_epoch*/,
+    const ceph::real_time* mod_ptr, const ceph::real_time* unmod_ptr,
+    bool /*high_precision_time*/, const char* if_match, const char* if_nomatch,
+    AttrsMod /*attrs_mod*/, bool /*copy_if_newer*/, Attrs& /*attrs*/,
+    RGWObjCategory /*category*/, uint64_t /*olh_epoch*/,
     boost::optional<ceph::real_time> /*delete_at*/, std::string* /*version_id*/,
     std::string* /*tag*/, std::string* /*etag*/, void (*)(off_t, void*),
     void* /*progress_data*/
@@ -306,6 +306,14 @@ int SFSObject::copy_object(
   ceph_assert(bucketref);
   ceph_assert(dst_object);
   ceph_assert(dst_bucket);
+
+  auto check_conditional = handle_copy_object_conditionals(
+      dpp, mod_ptr, unmod_ptr, if_match, if_nomatch, objref->get_meta().etag,
+      objref->get_meta().mtime
+  );
+  if (check_conditional != 0) {
+    return check_conditional;
+  }
 
   sfs::BucketRef dst_bucket_ref = store->get_bucket_ref(dst_bucket->get_name());
   ceph_assert(dst_bucket_ref);
@@ -564,6 +572,72 @@ void SFSObject::_refresh_meta_from_object(
   if (update_version_id_from_metadata) {
     set_instance(obj_to_refresh->instance);
   }
+}
+
+int SFSObject::handle_copy_object_conditionals(
+    const DoutPrefixProvider* dpp, const ceph::real_time* mod_ptr,
+    const ceph::real_time* unmod_ptr, const char* if_match,
+    const char* if_nomatch, const std::string& etag,
+    const ceph::real_time& mtime
+) const {
+  // This implementation diverts from the getObject one because the Amazon docs
+  // are not clear enough and the s3tests expect different returns codes.
+  // In addition s3tests don't test mod_ptr nor unmod_ptr
+  // I've tested this with another S3 vendor and the return code for all error
+  // cases is ERR_PRECONDITION_FAILED
+  if (!if_match && !if_nomatch && !mod_ptr && !unmod_ptr) {
+    return 0;
+  }
+  int result = 0;
+
+  if (if_match) {
+    const std::string match = rgw_string_unquote(if_match);
+    result = (etag == match) ? 0 : -ERR_PRECONDITION_FAILED;
+    ldpp_dout(dpp, 10) << fmt::format(
+                              "If-Match: etag={} vs. ifmatch={}: {}", etag,
+                              match, result
+                          )
+                       << dendl;
+  }
+  if (if_nomatch) {
+    const std::string match = rgw_string_unquote(if_nomatch);
+    result = (etag == match) ? -ERR_PRECONDITION_FAILED : 0;
+    ldpp_dout(dpp, 1) << fmt::format(
+                             "If-None-Match: etag={} vs. ifmatch={}: {}", etag,
+                             match, result
+                         )
+                      << dendl;
+  }
+  if (mod_ptr && !if_nomatch) {
+    result = (mtime > *mod_ptr) ? 0 : -ERR_PRECONDITION_FAILED;
+    ldpp_dout(dpp, 10)
+        << fmt::format(
+               "If-Modified-Since: mtime={:%Y-%m-%d %H:%M:%S} vs. "
+               "if_time={:%Y-%m-%d %H:%M:%S}: {}",
+               fmt::gmtime(ceph::real_clock::to_time_t(mtime)),
+               fmt::gmtime(ceph::real_clock::to_time_t(*mod_ptr)), result
+           )
+        << dendl;
+  }
+  if (unmod_ptr && !if_match) {
+    result = (mtime < *unmod_ptr) ? 0 : -ERR_PRECONDITION_FAILED;
+    ldpp_dout(dpp, 10)
+        << fmt::format(
+               "If-UnModified-Since: mtime={:%Y-%m-%d %H:%M:%S} vs. "
+               "if_time={:%Y-%m-%d %H:%M:%S}: {}",
+               fmt::gmtime(ceph::real_clock::to_time_t(mtime)),
+               fmt::gmtime(ceph::real_clock::to_time_t(*unmod_ptr)), result
+           )
+        << dendl;
+  }
+  ldpp_dout(dpp, 10)
+      << fmt::format(
+             "Conditional COPY_OBJ (Match/NoneMatch/Mod/UnMod) ({}, {}): {}",
+             if_match != nullptr, if_nomatch != nullptr, mod_ptr != nullptr,
+             unmod_ptr != nullptr, result
+         )
+      << dendl;
+  return result;
 }
 
 }  // namespace rgw::sal

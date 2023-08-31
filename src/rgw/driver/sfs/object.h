@@ -237,6 +237,13 @@ class SFSObject : public StoreObject {
   void refresh_meta(bool update_version_id_from_metadata = false);
 
   const std::string get_cls_name() { return "object"; }
+
+  int handle_copy_object_conditionals(
+      const DoutPrefixProvider* dpp, const ceph::real_time* mod_ptr,
+      const ceph::real_time* unmod_ptr, const char* if_match,
+      const char* if_nomatch, const std::string& etag,
+      const ceph::real_time& mtime
+  ) const;
 };
 
 }  // namespace rgw::sal
