@@ -574,6 +574,20 @@ SFStore::custom_metric_fns() {
             perfcounter_type_d::PERFCOUNTER_U64, "sfs_filesystem_avail_bytes",
             static_cast<double>(filesystem_stats_avail_bytes)
         );
+      },
+      [&]() {
+        const auto sqlite_fds = std::ranges::count_if(
+            std::filesystem::directory_iterator{"/proc/self/fd"},
+            [&](const auto& dentry) {
+              std::error_code ec;
+              const auto target = std::filesystem::read_symlink(dentry, ec);
+              return !ec && (target == db_conn->get_storage().filename());
+            }
+        );
+        return std::make_tuple(
+            perfcounter_type_d::PERFCOUNTER_U64, "sfs_sqlite_connection_count",
+            static_cast<double>(sqlite_fds)
+        );
       }};
   return fns;
 }
