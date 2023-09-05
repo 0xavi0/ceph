@@ -42,6 +42,7 @@ class TestSFSGC : public ::testing::Test {
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
+    cct->_conf.set_val("rgw_sfs_data_path", getTestDir());
     cct->_log->start();
     rgw_perf_start(cct.get());
   }
@@ -261,15 +262,13 @@ class TestSFSGC : public ::testing::Test {
 };
 
 TEST_F(TestSFSGC, TestDeletedBuckets) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
   auto gc = store->gc;
   gc->suspend();  // start suspended so we have control over processing
 
-  NoDoutPrefix ndp(ceph_context.get(), 1);
+  NoDoutPrefix ndp(cct.get(), 1);
   RGWEnv env;
-  env.init(ceph_context.get());
+  env.init(cct.get());
 
   // create the test user
   createTestUser(store->db_conn);
@@ -330,21 +329,19 @@ TEST_F(TestSFSGC, TestDeletedBuckets) {
 }
 
 TEST_F(TestSFSGC, TestDeletedBucketsWithMultiparts) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   uint MAX_OBJECTS_ITERATION = 1;
-  ceph_context->_conf.set_val(
+  cct->_conf.set_val(
       "rgw_sfs_gc_max_objects_per_iteration",
       std::to_string(MAX_OBJECTS_ITERATION)
   );
-  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
   auto gc = store->gc;
   gc->initialize();
   gc->suspend();  // start suspended so we have control over processing
 
-  NoDoutPrefix ndp(ceph_context.get(), 1);
+  NoDoutPrefix ndp(cct.get(), 1);
   RGWEnv env;
-  env.init(ceph_context.get());
+  env.init(cct.get());
 
   // create the test user
   createTestUser(store->db_conn);
@@ -416,15 +413,13 @@ TEST_F(TestSFSGC, TestDeletedBucketsWithMultiparts) {
 }
 
 TEST_F(TestSFSGC, TestDeletedObjects) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
   auto gc = store->gc;
   gc->suspend();  // start suspended so we have control over processing
 
-  NoDoutPrefix ndp(ceph_context.get(), 1);
+  NoDoutPrefix ndp(cct.get(), 1);
   RGWEnv env;
-  env.init(ceph_context.get());
+  env.init(cct.get());
 
   // create the test user
   createTestUser(store->db_conn);
@@ -482,16 +477,14 @@ TEST_F(TestSFSGC, TestDeletedObjects) {
 }
 
 TEST_F(TestSFSGC, TestDeletedObjectsAndDeletedBuckets) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
   auto gc = store->gc;
   gc->initialize();
   gc->suspend();  // start suspended so we have control over processing
 
-  NoDoutPrefix ndp(ceph_context.get(), 1);
+  NoDoutPrefix ndp(cct.get(), 1);
   RGWEnv env;
-  env.init(ceph_context.get());
+  env.init(cct.get());
 
   // create the test user
   createTestUser(store->db_conn);
@@ -560,21 +553,19 @@ TEST_F(TestSFSGC, TestDeletedObjectsAndDeletedBuckets) {
 }
 
 TEST_F(TestSFSGC, TestDoneAndAbortedMultiparts) {
-  auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
-  ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   uint MAX_OBJECTS_ITERATION = 1;
-  ceph_context->_conf.set_val(
+  cct->_conf.set_val(
       "rgw_sfs_gc_max_objects_per_iteration",
       std::to_string(MAX_OBJECTS_ITERATION)
   );
-  auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
   auto gc = store->gc;
   gc->initialize();
   gc->suspend();  // start suspended so we have control over processing
 
-  NoDoutPrefix ndp(ceph_context.get(), 1);
+  NoDoutPrefix ndp(cct.get(), 1);
   RGWEnv env;
-  env.init(ceph_context.get());
+  env.init(cct.get());
 
   // create the test user
   createTestUser(store->db_conn);
