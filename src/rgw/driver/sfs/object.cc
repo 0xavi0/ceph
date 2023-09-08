@@ -285,13 +285,13 @@ int SFSObject::copy_object(
     User* /*user*/, req_info* /*info*/, const rgw_zone_id& /*source_zone*/,
     rgw::sal::Object* dst_object, rgw::sal::Bucket* dst_bucket,
     rgw::sal::Bucket* src_bucket, const rgw_placement_rule& /*dest_placement*/,
-    ceph::real_time* /*src_mtime*/, ceph::real_time* /*mtime*/,
+    ceph::real_time* /*src_mtime*/, ceph::real_time* mtime,
     const ceph::real_time* mod_ptr, const ceph::real_time* unmod_ptr,
     bool /*high_precision_time*/, const char* if_match, const char* if_nomatch,
     AttrsMod /*attrs_mod*/, bool /*copy_if_newer*/, Attrs& /*attrs*/,
     RGWObjCategory /*category*/, uint64_t /*olh_epoch*/,
     boost::optional<ceph::real_time> /*delete_at*/, std::string* /*version_id*/,
-    std::string* /*tag*/, std::string* /*etag*/, void (*)(off_t, void*),
+    std::string* /*tag*/, std::string* etag, void (*)(off_t, void*),
     void* /*progress_data*/
     ,
     const DoutPrefixProvider* dpp, optional_yield /*y*/
@@ -355,6 +355,13 @@ int SFSObject::copy_object(
       store, dst_bucket_ref->get_info().versioning_enabled()
   );
 
+  // return values for CopyObjectResult response
+  if (etag != nullptr) {
+    *etag = dstref->get_meta().etag;
+  }
+  if (mtime != nullptr) {
+    *mtime = dstref->get_meta().mtime;
+  }
   return 0;
 }
 
