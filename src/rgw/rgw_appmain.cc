@@ -644,5 +644,7 @@ void rgw::AppMain::shutdown(std::function<void(void)> finalize_async_signals)
 #endif
   rgw_perf_stop(g_ceph_context);
   ratelimiter.reset(); // deletes--ensure this happens before we destruct
-  env.s3gw_telemetry->stop();
+  if (env.s3gw_telemetry) {
+    env.s3gw_telemetry->stop();
+  }
 } /* AppMain::shutdown */
