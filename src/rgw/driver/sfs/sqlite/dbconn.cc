@@ -33,20 +33,23 @@ static std::string get_temporary_db_path(CephContext* ctt) {
 }
 
 void DBConn::check_metadata_is_compatible() const {
-  std::string temporary_db_path(get_temporary_db_path(cct));
-  // create a copy of the actual metadata
-  fs::copy(getDBPath(cct), temporary_db_path);
-  try {
-    fs::copy(getDBPath(cct) + "-wal", temporary_db_path + "-wal");
-  } catch (const std::filesystem::filesystem_error& e) {
-    if (e.code() != std::errc::no_such_file_or_directory) {
-      throw e;
-    }
-  }
-
   bool sync_error = false;
   std::string result_message;
-  {
+  std::string temporary_db_path(get_temporary_db_path(cct));
+  // create a copy of the actual metadata
+  sqlite3* temporary_db;
+  int rc = sqlite3_open(temporary_db_path.c_str(), &temporary_db);
+  if (rc == SQLITE_OK) {
+    sqlite3_backup* backup =
+        sqlite3_backup_init(temporary_db, "main", first_sqlite_conn, "main");
+    if (backup) {
+      sqlite3_backup_step(backup, -1);
+      sqlite3_backup_finish(backup);
+    }
+    rc = sqlite3_errcode(temporary_db);
+    sqlite3_close(temporary_db);
+  }
+  if (rc == SQLITE_OK) {
     // try to sync the storage based on the temporary db
     // in case something goes wrong show possible errors and return
     auto test_storage = _make_storage(temporary_db_path);
@@ -80,17 +83,12 @@ void DBConn::check_metadata_is_compatible() const {
           "Metadata database might be corrupted or is no longer compatible";
       sync_error = true;
     }
+  } else {
+    sync_error = true;
+    result_message = sqlite3_errstr(rc);
   }
   // remove the temporary db
   fs::remove(temporary_db_path);
-
-  try {
-    fs::remove(temporary_db_path + "-wal");
-  } catch (const std::filesystem::filesystem_error& e) {
-    if (e.code() != std::errc::no_such_file_or_directory) {
-      throw e;
-    }
-  }
 
   // if there was a sync issue, throw an exception
   if (sync_error) {
