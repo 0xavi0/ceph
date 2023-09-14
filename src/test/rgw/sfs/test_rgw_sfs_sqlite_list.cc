@@ -76,6 +76,8 @@ class TestSFSList : public ::testing::Test {
     if (::testing::Test::HasFailure()) {
       dump_db();
     }
+    store.reset();
+    dbconn.reset();
     fs::remove_all(database_directory);
   }
 

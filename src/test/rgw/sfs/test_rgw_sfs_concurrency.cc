@@ -124,7 +124,11 @@ class TestSFSConcurrency
     cct->get_perfcounters_collection()->add(perfcounter_exec_time_sum);
   }
 
-  void TearDown() override { fs::remove_all(database_directory); }
+  void TearDown() override {
+    store.reset();
+    dbconn.reset();
+    fs::remove_all(database_directory);
+  }
 
   fs::path create_database_directory() const {
     const std::string rand = gen_rand_alphanumeric(cct.get(), 23);
