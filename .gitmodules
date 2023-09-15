@@ -72,3 +72,6 @@
 [submodule "src/jaegertracing/opentelemetry-cpp"]
 	path = src/jaegertracing/opentelemetry-cpp
 	url = https://github.com/open-telemetry/opentelemetry-cpp.git
+[submodule "src/rgw/driver/sfs/sqlite/sqlite_orm"]
+	path = src/rgw/driver/sfs/sqlite/sqlite_orm
+	url = https://github.com/fnc12/sqlite_orm.git

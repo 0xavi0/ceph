@@ -16,6 +16,10 @@ if(WITH_RADOSGW_LUA_PACKAGES)
   list(APPEND rgw_libs Boost::filesystem)
 endif()
 
+if(WITH_RADOSGW_SFS)
+  include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/rgw/driver/sfs/sqlite/sqlite_orm/include")
+endif()
+
 if(WITH_JAEGER)
   list(APPEND rgw_libs ${jaeger_base})
 endif()
