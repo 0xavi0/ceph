@@ -20,6 +20,8 @@
 
 #include "common/dout.h"
 
+#define dout_subsys ceph_subsys_rgw
+
 namespace fs = std::filesystem;
 namespace orm = sqlite_orm;
 
@@ -35,6 +37,32 @@ static std::string get_temporary_db_path(CephContext* ctt) {
 static void sqlite_error_callback(void* ctx, int error_code, const char* msg) {
   const auto cct = static_cast<CephContext*>(ctx);
   lderr(cct) << "[SQLITE] (" << error_code << ") " << msg << dendl;
+}
+
+static int sqlite_wal_hook_callback(
+    void* ctx, sqlite3* db, const char* zDb, int frames
+) {
+  const auto cct = static_cast<CephContext*>(ctx);
+  if (frames < 1000) {
+    // Don't checkpoint unless WAL > ~4MB
+    return SQLITE_OK;
+  }
+  int total_frames = 0;
+  int checkpointed_frames = 0;
+  int mode = SQLITE_CHECKPOINT_PASSIVE;
+  if (frames > 4000) {
+    // Trunate if WAL > ~16MB
+    mode = SQLITE_CHECKPOINT_TRUNCATE;
+  }
+  int rc = sqlite3_wal_checkpoint_v2(
+      db, zDb, mode, &total_frames, &checkpointed_frames
+  );
+  ldout(cct, 10) << "[SQLITE] WAL checkpoint ("
+                 << (mode == SQLITE_CHECKPOINT_PASSIVE ? "passive" : "truncate")
+                 << ") returned " << rc << " (" << sqlite3_errstr(rc)
+                 << "), total_frames=" << total_frames
+                 << ", checkpointed_frames=" << checkpointed_frames << dendl;
+  return SQLITE_OK;
 }
 
 static int sqlite_profile_callback(
@@ -99,9 +127,11 @@ DBConn::DBConn(CephContext* _cct)
         "PRAGMA synchronous=normal;"
         "PRAGMA temp_store = memory;"
         "PRAGMA case_sensitive_like=ON;"
-        "PRAGMA mmap_size = 30000000000;",
+        "PRAGMA mmap_size = 30000000000;"
+        "PRAGMA journal_size_limit = 4194304;",  // 4MB
         0, 0, 0
     );
+    sqlite3_wal_hook(db, sqlite_wal_hook_callback, this->cct);
     if (this->profile_enabled) {
       sqlite3_trace_v2(
           db, SQLITE_TRACE_PROFILE, &sqlite_profile_callback, this->cct
