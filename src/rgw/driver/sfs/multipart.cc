@@ -495,6 +495,9 @@ int SFSMultipartUploadV2::complete(
   }
 
   objref->update_attrs(mp->attrs);
+  bufferlist etag_bl;
+  etag_bl.append(etag.c_str(), etag.size());
+  objref->set_attr(RGW_ATTR_ETAG, etag_bl);
   objref->update_meta(
       {.size = accounted_bytes,
        .etag = etag,

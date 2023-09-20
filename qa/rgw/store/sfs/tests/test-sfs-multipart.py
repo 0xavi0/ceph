@@ -24,6 +24,7 @@ import random
 import tempfile
 from pydantic import BaseModel
 import hashlib
+import datetime
 
 ACCESS_KEY = "test"
 SECRET_KEY = "test"
@@ -447,3 +448,36 @@ class MultipartUploadSmokeTests(unittest.TestCase):
         except self.s3.meta.client.exceptions.NoSuchBucket:
             has_error = True
         self.assertTrue(has_error)
+
+    def test_multipart_upload_download_response(self):
+        bucket_name = self.create_bucket()
+        objname = self.get_random_object_name()
+        objsize = 100 * 1024**2  # 100 MB
+        objpath, md5 = self.gen_random_file(objname, objsize)
+
+        cfg = boto3.s3.transfer.TransferConfig(
+            multipart_threshold=10 * 1024,  # 10 MB
+            max_concurrency=10,
+            multipart_chunksize=10 * 1024**2,  # 10 MB
+            use_threads=True,
+        )
+
+        obj = self.s3.Object(bucket_name, objname)
+        obj.upload_file(objpath.as_posix(), Config=cfg)
+
+        response = self.s3c.get_object(Bucket=bucket_name, Key=objname)
+        self.assertTrue("ETag" in response)
+        # we uploaded 10 parts
+        self.assertTrue(response["ETag"].endswith('e-10"'))
+        self.assertTrue("LastModified" in response)
+        now = datetime.datetime.now()
+        # greater just in case we're running this test right at new year's eve
+        self.assertGreaterEqual(now.year, response["LastModified"].year)
+        self.assertTrue("ContentType" in response)
+        self.assertEqual("binary/octet-stream", response["ContentType"])
+        self.assertTrue("VersionId" in response)
+        self.assertNotEqual("", response["VersionId"])
+        self.assertTrue("ContentLength" in response)
+        self.assertEqual(objsize, response["ContentLength"])
+        self.delete_bucket(bucket_name)
+
