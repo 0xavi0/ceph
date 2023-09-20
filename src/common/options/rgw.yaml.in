@@ -3843,3 +3843,48 @@ options:
     Threshold to log slow queries with high log level.
   service:
     - rgw
+- name: rgw_sfs_wal_checkpoint_passive_frames
+  type: int
+  level: advanced
+  default: 1000
+  desc:
+    The number of frames after which to perform SQLITE_CHECKPOINT_PASSIVE,
+    which will checkpoint as many frames as possible, but which may not
+    complete if there are concurrent readers or writers.  The default of
+    1000 frames equates to about 4MB.
+  service:
+    - rgw
+- name: rgw_sfs_wal_checkpoint_truncate_frames
+  type: int
+  level: advanced
+  default: 4000
+  desc:
+    The number of frames after which to perform SQLITE_CHECKPOINT_TRUNCATE,
+    which will checkpoint all frames and truncate the WAL.  The default of
+    4000 frames equates to about 16MB.
+  service:
+    - rgw
+- name: rgw_sfs_wal_checkpoint_use_sqlite_default
+  type: bool
+  level: advanced
+  default: false
+  desc:
+    If set to true, SFS will use SQLite's default automatic checkpoint
+    mechanism, which is SQLITE_CHECKPOINT_PASSIVE only at 1000 frames
+    The rgw_sfs_wal_checkpoint_passive_frames and
+    rgw_sfs_wal_checkpoint_truncate_frames options will be ignored
+    in this case.
+  service:
+    - rgw
+- name: rgw_sfs_wal_size_limit
+  type: int
+  level: advanced
+  default: 4194304
+  desc:
+    SQLite's journal_size_limit, i.e. the size (in bytes) the WAL will be
+    truncated to after running SQLITE_CHECKPOINT_TRUNCATE.  The SFS default
+    is 4194304, i.e. 4MB.  Set this to -1 for no limit (which is SQLite's
+    default).
+  service:
+    - rgw
+

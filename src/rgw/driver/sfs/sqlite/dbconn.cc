@@ -43,15 +43,19 @@ static int sqlite_wal_hook_callback(
     void* ctx, sqlite3* db, const char* zDb, int frames
 ) {
   const auto cct = static_cast<CephContext*>(ctx);
-  if (frames < 1000) {
-    // Don't checkpoint unless WAL > ~4MB
+  if (frames <=
+      cct->_conf.get_val<int64_t>("rgw_sfs_wal_checkpoint_passive_frames")) {
+    // Don't checkpoint unless WAL > rgw_sfs_wal_checkpoint_passive_frames
+    // (1000, or ~4MB by default)
     return SQLITE_OK;
   }
   int total_frames = 0;
   int checkpointed_frames = 0;
   int mode = SQLITE_CHECKPOINT_PASSIVE;
-  if (frames > 4000) {
-    // Trunate if WAL > ~16MB
+  if (frames >
+      cct->_conf.get_val<int64_t>("rgw_sfs_wal_checkpoint_truncate_frames")) {
+    // Trunate if WAL > rgw_sfs_wal_checkpoint_truncate_frames
+    // (4000, or ~16MB by default)
     mode = SQLITE_CHECKPOINT_TRUNCATE;
   }
   int rc = sqlite3_wal_checkpoint_v2(
@@ -123,15 +127,22 @@ DBConn::DBConn(CephContext* _cct)
     sqlite3_busy_timeout(db, 10000);
     sqlite3_exec(
         db,
-        "PRAGMA journal_mode=WAL;"
-        "PRAGMA synchronous=normal;"
-        "PRAGMA temp_store = memory;"
-        "PRAGMA case_sensitive_like=ON;"
-        "PRAGMA mmap_size = 30000000000;"
-        "PRAGMA journal_size_limit = 4194304;",  // 4MB
+        fmt::format(
+            "PRAGMA journal_mode=WAL;"
+            "PRAGMA synchronous=normal;"
+            "PRAGMA temp_store = memory;"
+            "PRAGMA case_sensitive_like=ON;"
+            "PRAGMA mmap_size = 30000000000;"
+            "PRAGMA journal_size_limit = {};",
+            cct->_conf.get_val<int64_t>("rgw_sfs_wal_size_limit")
+        )
+            .c_str(),
         0, 0, 0
     );
-    sqlite3_wal_hook(db, sqlite_wal_hook_callback, this->cct);
+    if (!cct->_conf.get_val<bool>("rgw_sfs_wal_checkpoint_use_sqlite_default"
+        )) {
+      sqlite3_wal_hook(db, sqlite_wal_hook_callback, this->cct);
+    }
     if (this->profile_enabled) {
       sqlite3_trace_v2(
           db, SQLITE_TRACE_PROFILE, &sqlite_profile_callback, this->cct
