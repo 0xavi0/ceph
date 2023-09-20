@@ -1,17 +1,17 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <gtest/gtest.h>
+
+#include <filesystem>
+#include <memory>
+
 #include "common/ceph_context.h"
 #include "rgw/driver/sfs/sqlite/dbconn.h"
 #include "rgw/driver/sfs/sqlite/sqlite_users.h"
 #include "rgw/driver/sfs/sqlite/users/users_conversions.h"
-
 #include "rgw/rgw_sal_sfs.h"
 #include "rgw_sfs_utils.h"
-
-#include <filesystem>
-#include <gtest/gtest.h>
-#include <memory>
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 const static std::string TEST_DIR = "rgw_sfs_tests";
 
 class TestSFSSQLiteUsers : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -35,33 +35,34 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 };
 
-void compareUsers(const DBOPUserInfo & origin, const DBOPUserInfo & dest) {
+void compareUsers(const DBOPUserInfo& origin, const DBOPUserInfo& dest) {
   compareUsersRGWInfo(origin.uinfo, dest.uinfo);
   compareUserAttrs(origin.user_attrs, dest.user_attrs);
   compareUserVersion(origin.user_version, dest.user_version);
 }
 
-DBOPUserInfo createTestUser(const std::string & suffix) {
+DBOPUserInfo createTestUser(const std::string& suffix) {
   DBOPUserInfo user;
   user.uinfo.user_id.id = "test" + suffix;
   user.uinfo.user_id.tenant = "Tenant" + suffix;
   user.uinfo.user_id.ns = "NS" + suffix;
   user.uinfo.display_name = "DisplayName1" + suffix;
   user.uinfo.user_email = "user" + suffix + "@test.com";
-  user.uinfo.access_keys["key1_" + suffix] = RGWAccessKey("key1_" + suffix, "secret1");
-  user.uinfo.access_keys["key2_" + suffix] = RGWAccessKey("key2_" + suffix, "secret2");
-  user.uinfo.swift_keys["swift_key_1"] = RGWAccessKey("swift_key1_" + suffix, "swift_secret1");
+  user.uinfo.access_keys["key1_" + suffix] =
+      RGWAccessKey("key1_" + suffix, "secret1");
+  user.uinfo.access_keys["key2_" + suffix] =
+      RGWAccessKey("key2_" + suffix, "secret2");
+  user.uinfo.swift_keys["swift_key_1"] =
+      RGWAccessKey("swift_key1_" + suffix, "swift_secret1");
   RGWSubUser subuser;
   subuser.name = "subuser1";
   subuser.perm_mask = 1999;
@@ -90,7 +91,7 @@ DBOPUserInfo createTestUser(const std::string & suffix) {
   user.uinfo.assumed_role_arn = "assumed_role_arn";
   bufferlist buffer;
   std::string blob = "blob_test";
-  buffer.append(reinterpret_cast<const char *>(blob.c_str()), blob.length());
+  buffer.append(reinterpret_cast<const char*>(blob.c_str()), blob.length());
   user.user_attrs["attr1"] = buffer;
   user.user_version.ver = 1;
   user.user_version.tag = "user_version_tag";
@@ -355,14 +356,19 @@ TEST_F(TestSFSSQLiteUsers, UseStorage) {
 TEST_F(TestSFSSQLiteUsers, StoreListUsers) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   const NoDoutPrefix no_dpp(ceph_context.get(), 1);
   std::list<std::string> userIds;
   bool truncated;
-  void * meta_handle;
-  store->meta_list_keys_init(&no_dpp, std::string("user"), std::string(), &meta_handle);
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated);
+  void* meta_handle;
+  store->meta_list_keys_init(
+      &no_dpp, std::string("user"), std::string(), &meta_handle
+  );
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 0);
 
@@ -375,11 +381,14 @@ TEST_F(TestSFSSQLiteUsers, StoreListUsers) {
   db_users->store_user(user2);
   db_users->store_user(user3);
 
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(),userIds, &truncated);
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 3);
-  std::vector<std::string> users_vector{ std::make_move_iterator(userIds.begin()),
-                                  std::make_move_iterator(userIds.end()) };
+  std::vector<std::string> users_vector{
+      std::make_move_iterator(userIds.begin()),
+      std::make_move_iterator(userIds.end())};
   ASSERT_EQ(users_vector[0], "test1");
   ASSERT_EQ(users_vector[1], "test2");
   ASSERT_EQ(users_vector[2], "test3");
@@ -388,7 +397,8 @@ TEST_F(TestSFSSQLiteUsers, StoreListUsers) {
 TEST_F(TestSFSSQLiteUsers, StoreAddUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   auto user1 = createTestUser("1");
   auto sfs_user = std::make_shared<rgw::sal::SFSUser>(user1.uinfo, store.get());
@@ -399,9 +409,13 @@ TEST_F(TestSFSSQLiteUsers, StoreAddUser) {
 
   std::list<std::string> userIds;
   bool truncated;
-  void * meta_handle;
-  store->meta_list_keys_init(&no_dpp, std::string("user"), std::string(), &meta_handle);
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated);
+  void* meta_handle;
+  store->meta_list_keys_init(
+      &no_dpp, std::string("user"), std::string(), &meta_handle
+  );
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 1);
 
@@ -415,7 +429,8 @@ TEST_F(TestSFSSQLiteUsers, StoreAddUser) {
 TEST_F(TestSFSSQLiteUsers, StoreLoadUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   auto user1 = createTestUser("1");
   auto sfs_user = std::make_shared<rgw::sal::SFSUser>(user1.uinfo, store.get());
@@ -431,13 +446,16 @@ TEST_F(TestSFSSQLiteUsers, StoreLoadUser) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 1
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 1);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 }
 
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   auto user1 = createTestUser("1");
   auto stored_user = store->get_user(user1.uinfo.user_id);
@@ -453,13 +471,16 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 1
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 1);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // store again (change email)
   auto prev_info = user1.uinfo;
 
   stored_user->get_info().user_email = "this_was_updated@test.com";
-  user1.uinfo.user_email = "this_was_updated@test.com";  // set the same value so we can compare later
+  user1.uinfo.user_email =
+      "this_was_updated@test.com";  // set the same value so we can compare later
 
   // store and retrieve the old info
   RGWUserInfo old_info;
@@ -470,7 +491,9 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 2 now
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 2);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // check old info
   compareUsersRGWInfo(prev_info, old_info);
@@ -480,7 +503,8 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   auto user1 = createTestUser("1");
   auto stored_user = store->get_user(user1.uinfo.user_id);
@@ -496,7 +520,9 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 1
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 1);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // store again (no changes)
   EXPECT_EQ(stored_user->store_user(&no_dpp, null_yield, true), 0);
@@ -505,11 +531,14 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 2 now
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 2);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // store again (change email)
   stored_user->get_info().user_email = "this_was_updated@test.com";
-  user1.uinfo.user_email = "this_was_updated@test.com";  // set the same value so we can compare later
+  user1.uinfo.user_email =
+      "this_was_updated@test.com";  // set the same value so we can compare later
 
   EXPECT_EQ(stored_user->store_user(&no_dpp, null_yield, true), 0);
   EXPECT_EQ(stored_user->load_user(&no_dpp, null_yield), 0);
@@ -518,13 +547,16 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 3 now
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 3);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 }
 
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   auto user1 = createTestUser("1");
   auto stored_user = store->get_user(user1.uinfo.user_id);
@@ -540,7 +572,9 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 1
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 1);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // store again (no changes)
   EXPECT_EQ(stored_user->store_user(&no_dpp, null_yield, true), 0);
@@ -549,11 +583,14 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
   compareUserAttrs(stored_user->get_attrs(), user1.user_attrs);
   // version stored should be 2 now
   EXPECT_EQ(stored_user->get_version_tracker().read_version.ver, 2);
-  EXPECT_EQ(stored_user->get_version_tracker().read_version.tag, "user_version_tag");
+  EXPECT_EQ(
+      stored_user->get_version_tracker().read_version.tag, "user_version_tag"
+  );
 
   // store again (this time we manipulate the version so when storing next time it doesn't match)
   stored_user->get_info().user_email = "this_was_updated@test.com";
-  user1.uinfo.user_email = "this_was_updated@test.com";  // set the same value so we can compare later
+  user1.uinfo.user_email =
+      "this_was_updated@test.com";  // set the same value so we can compare later
 
   // change here the version obtained with load_user
   stored_user->get_version_tracker().read_version.ver = 1;
@@ -564,14 +601,19 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
 TEST_F(TestSFSSQLiteUsers, StoreRemoveUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
-  auto store = std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
+  auto store =
+      std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
   const NoDoutPrefix no_dpp(ceph_context.get(), 1);
   std::list<std::string> userIds;
   bool truncated;
-  void * meta_handle;
-  store->meta_list_keys_init(&no_dpp, std::string("user"), std::string(), &meta_handle);
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated);
+  void* meta_handle;
+  store->meta_list_keys_init(
+      &no_dpp, std::string("user"), std::string(), &meta_handle
+  );
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 0);
 
@@ -583,11 +625,14 @@ TEST_F(TestSFSSQLiteUsers, StoreRemoveUser) {
   db_users->store_user(user2);
   db_users->store_user(user3);
 
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated);
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 3);
-  std::vector<std::string> users_vector{ std::make_move_iterator(userIds.begin()),
-                                  std::make_move_iterator(userIds.end()) };
+  std::vector<std::string> users_vector{
+      std::make_move_iterator(userIds.begin()),
+      std::make_move_iterator(userIds.end())};
   ASSERT_EQ(users_vector[0], "test1");
   ASSERT_EQ(users_vector[1], "test2");
   ASSERT_EQ(users_vector[2], "test3");
@@ -598,11 +643,14 @@ TEST_F(TestSFSSQLiteUsers, StoreRemoveUser) {
 
   // ensure the user was removed
   userIds.clear();
-  store->meta_list_keys_next(&no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated);
+  store->meta_list_keys_next(
+      &no_dpp, meta_handle, std::numeric_limits<int>::max(), userIds, &truncated
+  );
   ASSERT_FALSE(truncated);
   ASSERT_EQ(userIds.size(), 2);
-  std::vector<std::string> users_after_remove_vector{ std::make_move_iterator(userIds.begin()),
-                                  std::make_move_iterator(userIds.end()) };
+  std::vector<std::string> users_after_remove_vector{
+      std::make_move_iterator(userIds.begin()),
+      std::make_move_iterator(userIds.end())};
   ASSERT_EQ(users_after_remove_vector[0], "test1");
   ASSERT_EQ(users_after_remove_vector[1], "test3");
 }

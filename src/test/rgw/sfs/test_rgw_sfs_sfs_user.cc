@@ -1,19 +1,18 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
-#include "common/ceph_context.h"
-#include "rgw/driver/sfs/sqlite/dbconn.h"
-#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
-#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
-#include "rgw/driver/sfs/sqlite/sqlite_users.h"
-
-#include "rgw/rgw_sal_sfs.h"
-
-#include "rgw_sfs_utils.h"
+#include <gtest/gtest.h>
 
 #include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
+
+#include "common/ceph_context.h"
+#include "rgw/driver/sfs/sqlite/buckets/bucket_conversions.h"
+#include "rgw/driver/sfs/sqlite/dbconn.h"
+#include "rgw/driver/sfs/sqlite/sqlite_buckets.h"
+#include "rgw/driver/sfs/sqlite/sqlite_users.h"
+#include "rgw/rgw_sal_sfs.h"
+#include "rgw_sfs_utils.h"
 
 /*
   HINT
@@ -25,7 +24,7 @@ using namespace rgw::sal::sfs::sqlite;
 namespace fs = std::filesystem;
 const static std::string TEST_DIR = "rgw_sfs_tests";
 
-RGWAccessControlPolicy get_aclp_default(){
+RGWAccessControlPolicy get_aclp_default() {
   RGWAccessControlPolicy aclp;
   rgw_user aclu("usr_id");
   aclp.get_acl().create_default(aclu, "usr_id");
@@ -36,10 +35,10 @@ RGWAccessControlPolicy get_aclp_default(){
   return aclp;
 }
 
-RGWAccessControlPolicy get_aclp_1(){
+RGWAccessControlPolicy get_aclp_1() {
   RGWAccessControlPolicy aclp;
   rgw_user aclu("usr_id");
-  RGWAccessControlList &acl = aclp.get_acl();
+  RGWAccessControlList& acl = aclp.get_acl();
   ACLGrant aclg;
   rgw_user gusr("usr_id_2");
   aclg.set_canon(gusr, "usr_id_2", (RGW_PERM_READ_OBJS | RGW_PERM_WRITE_OBJS));
@@ -51,14 +50,13 @@ RGWAccessControlPolicy get_aclp_1(){
   return aclp;
 }
 
-RGWBucketInfo get_binfo(){
+RGWBucketInfo get_binfo() {
   RGWBucketInfo arg_info;
   return arg_info;
 }
 
-
 class TestSFSUser : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -74,27 +72,25 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 
-  void createUser(const std::string & username, DBConnRef conn) {
+  void createUser(const std::string& username, DBConnRef conn) {
     SQLiteUsers users(conn);
     DBOPUserInfo user;
     user.uinfo.user_id.id = username;
     users.store_user(user);
   }
 
-  void createBucket(const std::string & name,
-                    const std::string & user_id,
-                    rgw::sal::SFStore * store,
-                    const std::shared_ptr<CephContext> & ceph_context) {
+  void createBucket(
+      const std::string& name, const std::string& user_id,
+      rgw::sal::SFStore* store, const std::shared_ptr<CephContext>& ceph_context
+  ) {
     rgw_bucket arg_bucket("t_" + name, name, "id_" + name);
     rgw_placement_rule arg_pl_rule("default", "STANDARD");
     std::string arg_swift_ver_location;
@@ -119,47 +115,53 @@ protected:
     rgw_user arg_user("", user_id, "");
     auto user = store->get_user(arg_user);
     ASSERT_TRUE(user != nullptr);
-    EXPECT_EQ(user->create_bucket(&ndp,                   //dpp
-                              arg_bucket,                 //b
-                              "zg1",                      //zonegroup_id
-                              arg_pl_rule,                //placement_rule
-                              arg_swift_ver_location,     //swift_ver_location
-                              &arg_quota_info,            //pquota_info
-                              arg_aclp,                   //policy
-                              arg_attrs,                  //attrs
-                              arg_info,                   //info
-                              arg_objv,                   //ep_objv
-                              false,                      //exclusive
-                              false,                      //obj_lock_enabled
-                              &existed,                   //existed
-                              arg_req_info,               //req_info
-                              &bucket_from_create,        //bucket
-                              null_yield                  //optional_yield
-                              ),
-          0);
-
+    EXPECT_EQ(
+        user->create_bucket(
+            &ndp,                    //dpp
+            arg_bucket,              //b
+            "zg1",                   //zonegroup_id
+            arg_pl_rule,             //placement_rule
+            arg_swift_ver_location,  //swift_ver_location
+            &arg_quota_info,         //pquota_info
+            arg_aclp,                //policy
+            arg_attrs,               //attrs
+            arg_info,                //info
+            arg_objv,                //ep_objv
+            false,                   //exclusive
+            false,                   //obj_lock_enabled
+            &existed,                //existed
+            arg_req_info,            //req_info
+            &bucket_from_create,     //bucket
+            null_yield               //optional_yield
+        ),
+        0
+    );
   }
 
-  bool bucketExists(const std::string & bucket_name,
-                    rgw::sal::BucketList & bucket_list) {
+  bool bucketExists(
+      const std::string& bucket_name, rgw::sal::BucketList& bucket_list
+  ) {
     auto it = bucket_list.get_buckets().find(bucket_name);
     return it != bucket_list.get_buckets().end();
   }
 };
 
-void compareUsers(const std::unique_ptr<rgw::sal::SFSUser> & rgw_user,
-                  const DBOPUserInfo & db_user) {
+void compareUsers(
+    const std::unique_ptr<rgw::sal::SFSUser>& rgw_user,
+    const DBOPUserInfo& db_user
+) {
   compareUsersRGWInfo(rgw_user->get_info(), db_user.uinfo);
   compareUserAttrs(rgw_user->get_attrs(), db_user.user_attrs);
-  compareUserVersion(rgw_user->get_version_tracker().read_version,
-                     db_user.user_version);
+  compareUserVersion(
+      rgw_user->get_version_tracker().read_version, db_user.user_version
+  );
 }
 
 TEST_F(TestSFSUser, ListBuckets) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
-  
+
   NoDoutPrefix ndp(ceph_context.get(), 1);
   RGWEnv env;
   env.init(ceph_context.get());
@@ -168,17 +170,19 @@ TEST_F(TestSFSUser, ListBuckets) {
   rgw_user arg_user("", "usr_id", "");
   auto user = store->get_user(arg_user);
 
-
   // should have 0 buckets now
   rgw::sal::BucketList bucket_list;
-  EXPECT_EQ(user->list_buckets(&ndp,
-                               "", // marker is ignored atm
-                               "", // end_maker is ignored atm
-                               0,  // max is ignored atm
-                               false, // need_stats is ignored atm
-                               bucket_list,
-                               null_yield),
-            0);
+  EXPECT_EQ(
+      user->list_buckets(
+          &ndp,
+          "",     // marker is ignored atm
+          "",     // end_maker is ignored atm
+          0,      // max is ignored atm
+          false,  // need_stats is ignored atm
+          bucket_list, null_yield
+      ),
+      0
+  );
   EXPECT_EQ(bucket_list.count(), 0);
 
   // create buckets
@@ -187,14 +191,17 @@ TEST_F(TestSFSUser, ListBuckets) {
   createBucket("bucket_test_3", "usr_id", store, ceph_context);
 
   // should have 3 buckets now
-  EXPECT_EQ(user->list_buckets(&ndp,
-                               "", // marker is ignored atm
-                               "", // end_maker is ignored atm
-                               0,  // max is ignored atm
-                               false, // need_stats is ignored atm
-                               bucket_list,
-                               null_yield),
-            0);
+  EXPECT_EQ(
+      user->list_buckets(
+          &ndp,
+          "",     // marker is ignored atm
+          "",     // end_maker is ignored atm
+          0,      // max is ignored atm
+          false,  // need_stats is ignored atm
+          bucket_list, null_yield
+      ),
+      0
+  );
   EXPECT_EQ(bucket_list.count(), 3);
 
   EXPECT_TRUE(bucketExists("bucket_test_1", bucket_list));
@@ -210,14 +217,17 @@ TEST_F(TestSFSUser, ListBuckets) {
 
   // user2 has no buckets yet
   bucket_list.clear();
-  EXPECT_EQ(user2->list_buckets(&ndp,
-                               "", // marker is ignored atm
-                               "", // end_maker is ignored atm
-                               0,  // max is ignored atm
-                               false, // need_stats is ignored atm
-                               bucket_list,
-                               null_yield),
-            0);
+  EXPECT_EQ(
+      user2->list_buckets(
+          &ndp,
+          "",     // marker is ignored atm
+          "",     // end_maker is ignored atm
+          0,      // max is ignored atm
+          false,  // need_stats is ignored atm
+          bucket_list, null_yield
+      ),
+      0
+  );
   EXPECT_EQ(bucket_list.count(), 0);
 
   // create buckets for user2
@@ -225,29 +235,34 @@ TEST_F(TestSFSUser, ListBuckets) {
   createBucket("bucket_test_2_2", "usr_id2", store, ceph_context);
 
   // should have 2 buckets now
-  EXPECT_EQ(user2->list_buckets(&ndp,
-                               "", // marker is ignored atm
-                               "", // end_maker is ignored atm
-                               0,  // max is ignored atm
-                               false, // need_stats is ignored atm
-                               bucket_list,
-                               null_yield),
-            0);
+  EXPECT_EQ(
+      user2->list_buckets(
+          &ndp,
+          "",     // marker is ignored atm
+          "",     // end_maker is ignored atm
+          0,      // max is ignored atm
+          false,  // need_stats is ignored atm
+          bucket_list, null_yield
+      ),
+      0
+  );
   EXPECT_EQ(bucket_list.count(), 2);
   EXPECT_TRUE(bucketExists("bucket_test_2_1", bucket_list));
   EXPECT_TRUE(bucketExists("bucket_test_2_2", bucket_list));
 
-
   // first user has the same list
   bucket_list.clear();
-  EXPECT_EQ(user->list_buckets(&ndp,
-                               "", // marker is ignored atm
-                               "", // end_maker is ignored atm
-                               0,  // max is ignored atm
-                               false, // need_stats is ignored atm
-                               bucket_list,
-                               null_yield),
-            0);
+  EXPECT_EQ(
+      user->list_buckets(
+          &ndp,
+          "",     // marker is ignored atm
+          "",     // end_maker is ignored atm
+          0,      // max is ignored atm
+          false,  // need_stats is ignored atm
+          bucket_list, null_yield
+      ),
+      0
+  );
   EXPECT_EQ(bucket_list.count(), 3);
 
   EXPECT_TRUE(bucketExists("bucket_test_1", bucket_list));
@@ -326,8 +341,10 @@ TEST_F(TestSFSUser, StoreUser) {
   EXPECT_EQ(user->load_user(&ndp, null_yield), 0);
 
   // version should be increased by 1
-  EXPECT_EQ(user->get_version_tracker().read_version.ver,
-            db_user->user_version.ver + 1);
+  EXPECT_EQ(
+      user->get_version_tracker().read_version.ver,
+      db_user->user_version.ver + 1
+  );
 
   ASSERT_TRUE(compareMaps(user->get_info().access_keys, access_keys));
 

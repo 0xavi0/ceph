@@ -280,7 +280,9 @@ TEST_P(TestSFSListObjectsAndVersions, wildcard_in_prefix_do_not_match) {
   ASSERT_EQ(results.size(), 0);
 }
 
-TEST_P(TestSFSListObjectsAndVersions, prefix_matches_dont_interprete_wildcards) {
+TEST_P(
+    TestSFSListObjectsAndVersions, prefix_matches_dont_interprete_wildcards
+) {
   std::vector<rgw_bucket_dir_entry> results;
   add_obj_single_ver("___$");
   add_obj_single_ver("$__$");

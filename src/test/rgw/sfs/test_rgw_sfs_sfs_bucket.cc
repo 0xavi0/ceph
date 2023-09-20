@@ -971,7 +971,7 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
       0
   );
 
-  // we expect only the "file" oject (the rest are aggregated in common prefix)
+  // we expect only the "file" object (the rest are aggregated in common prefix)
   expected_objects.clear();
   expected_objects[object5->name] = object5;
   nb_found_objects = 0;
@@ -1194,7 +1194,7 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
       0
   );
 
-  // we expect only the "file" oject (the rest are aggregated in common prefix)
+  // we expect only the "file" object (the rest are aggregated in common prefix)
   expected_objects.clear();
   expected_objects[object5->name] = object5;
   nb_found_objects = 0;

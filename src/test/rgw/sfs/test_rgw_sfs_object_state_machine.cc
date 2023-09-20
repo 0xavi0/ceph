@@ -158,7 +158,8 @@ TEST_F(
 ) {
   const auto object = bucket->create_version(rgw_obj_key("foo"));
   std::string unused;
-  ASSERT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused));
+  ASSERT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused)
+  );
   EXPECT_EQ(database_object_state(object), ObjectState::DELETED);
   EXPECT_EQ(database_version_type(object), VersionType::REGULAR);
 }
@@ -169,7 +170,8 @@ TEST_F(
 ) {
   const auto object = bucket->create_version(rgw_obj_key("foo"));
   std::string unused;
-  ASSERT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused));
+  ASSERT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused)
+  );
   ASSERT_EQ(database_object_state(object), ObjectState::DELETED);
   EXPECT_FALSE(object->metadata_finish(store.get(), false));
   EXPECT_EQ(database_object_state(object), ObjectState::DELETED);
@@ -189,7 +191,8 @@ TEST_F(
 }
 
 TEST_F(
-    TestSFSObjectStateMachine, unversioned__commit_deletes_all_committed_versions
+    TestSFSObjectStateMachine,
+    unversioned__commit_deletes_all_committed_versions
 ) {
   const std::array<ObjectRef, 3> objects = {
       bucket->create_version(rgw_obj_key("foo", "version1")),
@@ -206,9 +209,7 @@ TEST_F(
   EXPECT_EQ(database_object_state(objects[2]), ObjectState::OPEN);
 }
 
-TEST_F(
-    TestSFSObjectStateMachine, unversioned__last_committer_wins
-) {
+TEST_F(TestSFSObjectStateMachine, unversioned__last_committer_wins) {
   const std::array<ObjectRef, 3> objects = {
       bucket->create_version(rgw_obj_key("foo", "version1")),
       bucket->create_version(rgw_obj_key("foo", "version2")),
@@ -318,20 +319,19 @@ TEST_F(
   const auto object = bucket->create_version(rgw_obj_key("foo"));
   object->metadata_finish(store.get(), false);
   std::string unused;
-  EXPECT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused));
+  EXPECT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), false, unused)
+  );
   EXPECT_EQ(database_object_state(object), ObjectState::DELETED);
   EXPECT_EQ(database_version_type(object), VersionType::REGULAR);
   EXPECT_EQ(database_number_of_versions(object), 1);
 }
 
-
-class TestSFSVersionedDeleteMarkerTests : public TestSFSObjectStateMachine,
-					  public testing::WithParamInterface<ObjectState> {
-};
+class TestSFSVersionedDeleteMarkerTests
+    : public TestSFSObjectStateMachine,
+      public testing::WithParamInterface<ObjectState> {};
 
 TEST_P(
-    TestSFSVersionedDeleteMarkerTests,
-    deleting_object_creates_delete_marker
+    TestSFSVersionedDeleteMarkerTests, deleting_object_creates_delete_marker
 ) {
   const auto object = bucket->create_version(rgw_obj_key("foo", "VERSION"));
   const ObjectState initial_state = GetParam();
@@ -346,7 +346,9 @@ TEST_P(
   ASSERT_EQ(database_version_type(object), VersionType::REGULAR);
 
   std::string delete_marker_id;
-  ASSERT_TRUE(bucket->delete_object(*object, rgw_obj_key("foo"), true, delete_marker_id));
+  ASSERT_TRUE(
+      bucket->delete_object(*object, rgw_obj_key("foo"), true, delete_marker_id)
+  );
   const auto versions = database_get_versions_as_id_type_state(object);
   EXPECT_FALSE(delete_marker_id.empty());
   ASSERT_EQ(versions.size(), 2);
@@ -358,9 +360,10 @@ TEST_P(
   EXPECT_EQ(std::get<2>(versions[1]), ObjectState::COMMITTED);
 }
 
-INSTANTIATE_TEST_SUITE_P(OpenAndCommitted,
-			 TestSFSVersionedDeleteMarkerTests,
-			testing::Values(ObjectState::OPEN, ObjectState::COMMITTED));
+INSTANTIATE_TEST_SUITE_P(
+    OpenAndCommitted, TestSFSVersionedDeleteMarkerTests,
+    testing::Values(ObjectState::OPEN, ObjectState::COMMITTED)
+);
 
 TEST_F(
     TestSFSObjectStateMachine,

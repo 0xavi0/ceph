@@ -1,16 +1,16 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 
+#include <gtest/gtest.h>
+
+#include <filesystem>
+#include <memory>
+#include <random>
+
 #include "common/ceph_context.h"
 #include "rgw/driver/sfs/sqlite/dbconn.h"
 #include "rgw/driver/sfs/sqlite/sqlite_lifecycle.h"
-
 #include "rgw/rgw_sal_sfs.h"
-
-#include <filesystem>
-#include <gtest/gtest.h>
-#include <memory>
-#include <random>
 
 using namespace rgw::sal::sfs::sqlite;
 
@@ -19,7 +19,7 @@ const static std::string TEST_DIR = "rgw_sfs_tests";
 const static std::string LC_SHARD = "lc.0";
 
 class TestSFSSQLiteLifecycle : public ::testing::Test {
-protected:
+ protected:
   void SetUp() override {
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
@@ -35,18 +35,17 @@ protected:
     return test_dir.string();
   }
 
-  fs::path getDBFullPath(const std::string & base_dir) const {
+  fs::path getDBFullPath(const std::string& base_dir) const {
     auto db_full_name = "s3gw.db";
-    auto db_full_path = fs::path(base_dir) /  db_full_name;
+    auto db_full_path = fs::path(base_dir) / db_full_name;
     return db_full_path;
   }
 
-  fs::path getDBFullPath() const {
-    return getDBFullPath(getTestDir());
-  }
+  fs::path getDBFullPath() const { return getDBFullPath(getTestDir()); }
 };
 
-std::string getLCBucketName(const rgw::sal::sfs::sqlite::DBOPBucketInfo & bucket) {
+std::string getLCBucketName(const rgw::sal::sfs::sqlite::DBOPBucketInfo& bucket
+) {
   return ":" + bucket.binfo.bucket.name + ":" + bucket.binfo.bucket.marker;
 }
 
@@ -73,7 +72,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreHead) {
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   auto db_lc = std::make_shared<SQLiteLifecycle>(conn);
 
-  DBOPLCHead db_head { LC_SHARD, "bucket_name_marker", 12345 };
+  DBOPLCHead db_head{LC_SHARD, "bucket_name_marker", 12345};
   db_lc->store_head(db_head);
 
   auto lc_head = db_lc->get_head(LC_SHARD);
@@ -90,7 +89,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreDeleteHead) {
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   auto db_lc = std::make_shared<SQLiteLifecycle>(conn);
 
-  DBOPLCHead db_head { LC_SHARD, "bucket_name_marker", 12345 };
+  DBOPLCHead db_head{LC_SHARD, "bucket_name_marker", 12345};
   db_lc->store_head(db_head);
 
   auto lc_head = db_lc->get_head(LC_SHARD);
@@ -119,7 +118,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreGetEntry) {
   ASSERT_FALSE(db_entry_not_found.has_value());
 
   // store entry
-  DBOPLCEntry db_entry { LC_SHARD, "bucket_name_marker", 12345, 123 };
+  DBOPLCEntry db_entry{LC_SHARD, "bucket_name_marker", 12345, 123};
   db_lc->store_entry(db_entry);
 
   auto db_entry_found = db_lc->get_entry(LC_SHARD, "bucket_name_marker");
@@ -143,11 +142,11 @@ TEST_F(TestSFSSQLiteLifecycle, GetNextEntry) {
   ASSERT_FALSE(no_entries.has_value());
 
   // store a few entries
-  DBOPLCEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
-  DBOPLCEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
-  DBOPLCEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
-  DBOPLCEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
-  DBOPLCEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
+  DBOPLCEntry db_entry_1{LC_SHARD, "bucket_1", 1111, 1};
+  DBOPLCEntry db_entry_2{LC_SHARD, "bucket_2", 2222, 2};
+  DBOPLCEntry db_entry_3{LC_SHARD, "bucket_3", 3333, 3};
+  DBOPLCEntry db_entry_4{LC_SHARD, "bucket_4", 4444, 4};
+  DBOPLCEntry db_entry_5{LC_SHARD, "a_bucket_5", 5555, 5};
   db_lc->store_entry(db_entry_1);
   db_lc->store_entry(db_entry_2);
   db_lc->store_entry(db_entry_3);
@@ -208,11 +207,11 @@ TEST_F(TestSFSSQLiteLifecycle, ListEntries) {
   auto db_lc = std::make_shared<SQLiteLifecycle>(conn);
 
   // store a few entries
-  DBOPLCEntry db_entry_1 { LC_SHARD, "bucket_1", 1111, 1 };
-  DBOPLCEntry db_entry_2 { LC_SHARD, "bucket_2", 2222, 2 };
-  DBOPLCEntry db_entry_3 { LC_SHARD, "bucket_3", 3333, 3 };
-  DBOPLCEntry db_entry_4 { LC_SHARD, "bucket_4", 4444, 4 };
-  DBOPLCEntry db_entry_5 { LC_SHARD, "a_bucket_5", 5555, 5 };
+  DBOPLCEntry db_entry_1{LC_SHARD, "bucket_1", 1111, 1};
+  DBOPLCEntry db_entry_2{LC_SHARD, "bucket_2", 2222, 2};
+  DBOPLCEntry db_entry_3{LC_SHARD, "bucket_3", 3333, 3};
+  DBOPLCEntry db_entry_4{LC_SHARD, "bucket_4", 4444, 4};
+  DBOPLCEntry db_entry_5{LC_SHARD, "a_bucket_5", 5555, 5};
   db_lc->store_entry(db_entry_1);
   db_lc->store_entry(db_entry_2);
   db_lc->store_entry(db_entry_3);

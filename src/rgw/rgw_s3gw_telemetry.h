@@ -131,7 +131,7 @@ class S3GWTelemetry {
   /// Schedule update immediately. Only call after start(), before stop()
   void update();
 
-  /// Return available versions. Populated after successful update. Otherweise empty.
+  /// Return available versions. Populated after successful update. Otherwise empty.
   std::vector<Version> available_versions() const;
 
   /// Return status information regarding sending / receiving update.
