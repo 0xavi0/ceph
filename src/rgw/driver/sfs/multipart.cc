@@ -282,6 +282,7 @@ int SFSMultipartUploadV2::complete(
           << dendl;
       return -ERR_INVALID_PART;
     }
+    hash.update(etag);
 
     if ((part.size < 5 * 1024 * 1024) &&
         (std::distance(it, part_etags.cend()) > 1)) {

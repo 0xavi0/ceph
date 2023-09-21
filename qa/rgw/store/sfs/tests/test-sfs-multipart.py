@@ -25,6 +25,7 @@ import tempfile
 from pydantic import BaseModel
 import hashlib
 import datetime
+import re
 
 ACCESS_KEY = "test"
 SECRET_KEY = "test"
@@ -153,6 +154,24 @@ class MultipartUploadSmokeTests(unittest.TestCase):
                 found = True
                 break
         self.assertTrue(found)
+
+    def verify_multipart_response(self, response, nb_parts, objsize) -> None:
+        self.assertTrue("ETag" in response)
+        # check that it is a md5 followed by - followed by number of parts
+        etag_multipart_re = re.compile('"[A-Fa-f0-9]{32}-[0-9]+"')
+        self.assertIsNotNone(etag_multipart_re.match(response["ETag"]))
+        # we uploaded 10 parts
+        self.assertTrue(response["ETag"].endswith('-{}"'.format(nb_parts)))
+        self.assertTrue("LastModified" in response)
+        now = datetime.datetime.now()
+        # greater just in case we're running this test right at new year's eve
+        self.assertGreaterEqual(now.year, response["LastModified"].year)
+        self.assertTrue("ContentType" in response)
+        self.assertEqual("binary/octet-stream", response["ContentType"])
+        self.assertTrue("VersionId" in response)
+        self.assertNotEqual("", response["VersionId"])
+        self.assertTrue("ContentLength" in response)
+        self.assertEqual(objsize, response["ContentLength"])
 
     def test_dne_upload_multipart(self):
         bucket_name = self.create_bucket()
@@ -466,18 +485,29 @@ class MultipartUploadSmokeTests(unittest.TestCase):
         obj.upload_file(objpath.as_posix(), Config=cfg)
 
         response = self.s3c.get_object(Bucket=bucket_name, Key=objname)
-        self.assertTrue("ETag" in response)
-        # we uploaded 10 parts
-        self.assertTrue(response["ETag"].endswith('e-10"'))
-        self.assertTrue("LastModified" in response)
-        now = datetime.datetime.now()
-        # greater just in case we're running this test right at new year's eve
-        self.assertGreaterEqual(now.year, response["LastModified"].year)
-        self.assertTrue("ContentType" in response)
-        self.assertEqual("binary/octet-stream", response["ContentType"])
-        self.assertTrue("VersionId" in response)
-        self.assertNotEqual("", response["VersionId"])
-        self.assertTrue("ContentLength" in response)
-        self.assertEqual(objsize, response["ContentLength"])
+        self.verify_multipart_response(response, 10, objsize)
+        # store etag to compare with second upload
+        first_upload_etag = response["ETag"]
+
+        # now upload a new multipart object
+        objname = self.get_random_object_name()
+        objsize = 110 * 1024**2  # 110 MB
+        objpath, md5 = self.gen_random_file(objname, objsize)
+
+        cfg = boto3.s3.transfer.TransferConfig(
+            multipart_threshold=10 * 1024,  # 10 MB
+            max_concurrency=11,
+            multipart_chunksize=10 * 1024**2,  # 10 MB
+            use_threads=True,
+        )
+
+        obj = self.s3.Object(bucket_name, objname)
+        obj.upload_file(objpath.as_posix(), Config=cfg)
+
+        response = self.s3c.get_object(Bucket=bucket_name, Key=objname)
+        self.verify_multipart_response(response, 11, objsize)
+
+        # check that etags are different
+        self.assertNotEqual(response["ETag"], first_upload_etag)
         self.delete_bucket(bucket_name)
 
