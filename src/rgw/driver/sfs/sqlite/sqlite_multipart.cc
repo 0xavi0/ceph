@@ -487,8 +487,13 @@ SQLiteMultipart::remove_multiparts_by_bucket_id_transact(
     );
     ceph_assert(ids.size() == ret_parts.size());
     if (ret_parts.size() == 0) {
-      // nothing to be deleted. We can return now
-      // no need to commit the transaction as nothing was changed
+      // there are no pending parts for this bucket
+      // we can safely delete all multiparts in it.
+      // This will take care of multiparts that had 0 parts initially
+      storage.remove_all<DBMultipart>(
+          where(is_equal(&DBMultipart::bucket_id, bucket_id))
+      );
+      transaction.commit();
       return ret_parts;
     }
     // remove the parts selected
@@ -551,8 +556,14 @@ SQLiteMultipart::remove_done_or_aborted_multiparts_transact(uint max_items
     );
     ceph_assert(ids.size() == ret_parts.size());
     if (ret_parts.size() == 0) {
-      // nothing to be deleted. We can return now
-      // no need to commit the transaction as nothing was changed
+      // there are no pending parts for this bucket
+      // we can safely delete all multiparts in it.
+      // This will take care of multiparts that had 0 parts initially
+      storage.remove_all<DBMultipart>(where(
+          is_equal(&DBMultipart::state, MultipartState::DONE) or
+          is_equal(&DBMultipart::state, MultipartState::ABORTED)
+      ));
+      transaction.commit();
       return ret_parts;
     }
     // remove the parts selected

@@ -650,3 +650,115 @@ TEST_F(TestSFSGC, TestDoneAndAbortedMultiparts) {
   EXPECT_TRUE(db_multipart.get_multipart("multipart1").has_value());
   EXPECT_TRUE(db_multipart.get_multipart("multipart2").has_value());
 }
+
+TEST_F(TestSFSGC, TestMultipartsWithZeroParts) {
+  uint MAX_OBJECTS_ITERATION = 1;
+  cct->_conf.set_val(
+      "rgw_sfs_gc_max_objects_per_iteration",
+      std::to_string(MAX_OBJECTS_ITERATION)
+  );
+  auto store = new rgw::sal::SFStore(cct.get(), getTestDir());
+  auto gc = store->gc;
+  gc->initialize();
+  gc->suspend();  // start suspended so we have control over processing
+
+  NoDoutPrefix ndp(cct.get(), 1);
+  RGWEnv env;
+  env.init(cct.get());
+
+  // create the test user
+  createTestUser(store->db_conn);
+
+  // create 2 buckets
+  createTestBucket("test_bucket_1", store->db_conn);
+  createTestBucket("test_bucket_2", store->db_conn);
+
+  // create a few objects in bucket_1 with a few versions
+  uint version_id = 1;
+  auto object1 = createTestObject("test_bucket_1", "obj_1", store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+  createTestObjectVersion(object1, version_id++, store->db_conn);
+
+  auto object2 = createTestObject("test_bucket_2", "obj_2", store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+  createTestObjectVersion(object2, version_id++, store->db_conn);
+
+  // we should have 5 version files plus the sqlite db
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  EXPECT_TRUE(databaseFileExists());
+
+  // now create multiparts with all states
+  auto multipart1 = createMultipartWithParts(
+      "test_bucket_1", "multipart1", rgw::sal::sfs::MultipartState::INPROGRESS,
+      0, store->db_conn
+  );
+
+  auto multipart2 = createMultipartWithParts(
+      "test_bucket_2", "multipart2", rgw::sal::sfs::MultipartState::COMPLETE, 0,
+      store->db_conn
+  );
+
+  auto multipart3 = createMultipartWithParts(
+      "test_bucket_1", "multipart3", rgw::sal::sfs::MultipartState::AGGREGATING,
+      0, store->db_conn
+  );
+
+  auto multipart4 = createMultipartWithParts(
+      "test_bucket_1", "multipart4", rgw::sal::sfs::MultipartState::DONE, 0,
+      store->db_conn
+  );
+
+  auto multipart5 = createMultipartWithParts(
+      "test_bucket_1", "multipart5", rgw::sal::sfs::MultipartState::ABORTED, 0,
+      store->db_conn
+  );
+
+  // we should still have 5 files.. (there are no parts)
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  SQLiteVersionedObjects db_versioned_objs(store->db_conn);
+  auto versions = db_versioned_objs.get_versioned_object_ids();
+  EXPECT_EQ(versions.size(), 5);
+
+  // verify that all multiparts are present
+  // (including the done and aborted)
+  rgw::sal::sfs::sqlite::SQLiteMultipart db_multipart(store->db_conn);
+  EXPECT_TRUE(db_multipart.get_multipart("multipart1").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart2").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart3").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart4").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart5").has_value());
+  gc->process();
+  // we should still have 5 files
+  EXPECT_EQ(getStoreDataFileCount(), 5);
+  // verify that the done and aborted multiparts are gone
+  // the rest stay
+  EXPECT_TRUE(db_multipart.get_multipart("multipart1").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart2").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart3").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart4").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart5").has_value());
+
+  // delete bucket 1 now
+  deleteTestBucket("test_bucket_1", store->db_conn);
+  gc->process();
+  // check that all multiparts of bucket 1 should be gone
+  EXPECT_FALSE(db_multipart.get_multipart("multipart1").has_value());
+  EXPECT_TRUE(db_multipart.get_multipart("multipart2").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart3").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart4").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart5").has_value());
+
+  // delete bucket 2 now
+  deleteTestBucket("test_bucket_2", store->db_conn);
+  gc->process();
+  // all multiparts should be gone
+  EXPECT_FALSE(db_multipart.get_multipart("multipart1").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart2").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart3").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart4").has_value());
+  EXPECT_FALSE(db_multipart.get_multipart("multipart5").has_value());
+
+  // objects and version should be gone too
+  EXPECT_EQ(getStoreDataFileCount(), 0);
+}
