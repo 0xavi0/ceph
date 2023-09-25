@@ -66,6 +66,7 @@ class TestSFSObjectStateMachine : public ::testing::Test {
   }
 
   void TearDown() override {
+    store.reset();
     fs::current_path(fs::temp_directory_path());
     fs::remove_all(TEST_DIR);
   }
