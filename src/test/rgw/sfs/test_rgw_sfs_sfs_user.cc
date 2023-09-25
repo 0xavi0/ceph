@@ -160,6 +160,7 @@ void compareUsers(
 TEST_F(TestSFSUser, ListBuckets) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -273,6 +274,7 @@ TEST_F(TestSFSUser, ListBuckets) {
 TEST_F(TestSFSUser, LoadUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -298,6 +300,7 @@ TEST_F(TestSFSUser, LoadUser) {
 TEST_F(TestSFSUser, LoadUserDoesNotExist) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -311,6 +314,7 @@ TEST_F(TestSFSUser, LoadUserDoesNotExist) {
 TEST_F(TestSFSUser, StoreUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -355,6 +359,7 @@ TEST_F(TestSFSUser, StoreUser) {
 TEST_F(TestSFSUser, StoreUserVersionMismatch) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -374,6 +379,7 @@ TEST_F(TestSFSUser, StoreUserVersionMismatch) {
 TEST_F(TestSFSUser, RemoveUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);

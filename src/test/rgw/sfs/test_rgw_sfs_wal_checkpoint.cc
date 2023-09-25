@@ -33,6 +33,7 @@ class TestSFSWALCheckpoint : public ::testing::Test {
         test_dir(fs::temp_directory_path() / TEST_DIR) {
     fs::create_directory(test_dir);
     cct->_conf.set_val("rgw_sfs_data_path", test_dir);
+    cct->_log->start();
     store.reset(new rgw::sal::SFStore(cct.get(), test_dir));
 
     sqlite::SQLiteUsers users(store->db_conn);

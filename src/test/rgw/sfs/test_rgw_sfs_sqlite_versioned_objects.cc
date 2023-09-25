@@ -175,6 +175,7 @@ void compareVersionedObjects(
 TEST_F(TestSFSSQLiteVersionedObjects, CreateAndGet) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -205,6 +206,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndGet) {
 TEST_F(TestSFSSQLiteVersionedObjects, ListObjectsIDs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -244,6 +246,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, ListObjectsIDs) {
 TEST_F(TestSFSSQLiteVersionedObjects, ListBucketsIDsPerObject) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -291,6 +294,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, ListBucketsIDsPerObject) {
 TEST_F(TestSFSSQLiteVersionedObjects, RemoveObject) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -323,6 +327,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, RemoveObject) {
 TEST_F(TestSFSSQLiteVersionedObjects, RemoveObjectThatDoesNotExist) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -356,6 +361,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, RemoveObjectThatDoesNotExist) {
 TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -411,6 +417,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateAndUpdate) {
 TEST_F(TestSFSSQLiteVersionedObjects, GetExisting) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -440,6 +447,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetExisting) {
 TEST_F(TestSFSSQLiteVersionedObjects, CreateObjectForNonExistingBucket) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
 
@@ -479,6 +487,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, CreateObjectForNonExistingBucket) {
 TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -538,6 +547,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreCreatesNewVersions) {
 TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -582,6 +592,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersion) {
 TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersionRepeatedCommitTime) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -644,6 +655,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, GetLastVersionRepeatedCommitTime) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestInsertIncreaseID) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -694,6 +706,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestInsertIncreaseID) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestUpdate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -726,6 +739,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdate) {
 TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
 
@@ -776,6 +790,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, StoreUnsupportedTimestamp) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestFilterDeleted) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -900,6 +915,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestFilterDeleted) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestDeleteLastAndGetPrevious) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -946,6 +962,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestDeleteLastAndGetPrevious) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -1068,6 +1085,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestGetByBucketAndObjectName) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateAndDeleteRest) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -1137,6 +1155,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateAndDeleteRest) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateDeleteVersionDeletesObject) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -1262,6 +1281,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestUpdateDeleteVersionDeletesObject) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestAddDeleteMarker) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -1381,6 +1401,7 @@ void insertNCommittedVersionsIncrementingSize(
 TEST_F(TestSFSSQLiteVersionedObjects, TestRemovedDeletedVersions) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto max_objects_per_iteration = ceph_context->_conf.get_val<uint64_t>(
       "rgw_sfs_gc_max_objects_per_iteration"
   );
@@ -1559,6 +1580,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestRemovedDeletedVersions) {
 TEST_F(TestSFSSQLiteVersionedObjects, TestRemovedDeletedVersionsLimitMax) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   ceph_context->_conf.set_val("rgw_sfs_gc_max_objects_per_iteration", "2");
   auto max_objects_per_iteration = ceph_context->_conf.get_val<uint64_t>(
       "rgw_sfs_gc_max_objects_per_iteration"
@@ -1706,6 +1728,7 @@ TEST_F(TestSFSSQLiteVersionedObjects, TestDeleteMarkerAlwaysOnTop) {
   // in which a delete_marker had a lower commit time than an alive version
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());

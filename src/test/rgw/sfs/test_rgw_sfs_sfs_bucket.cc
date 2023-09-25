@@ -149,6 +149,7 @@ void compareListEntry(
 TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -230,6 +231,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromCreate) {
 TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -310,6 +312,7 @@ TEST_F(TestSFSBucket, UserCreateBucketCheckGotFromStore) {
 TEST_F(TestSFSBucket, BucketSetAcl) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -392,6 +395,7 @@ TEST_F(TestSFSBucket, BucketSetAcl) {
 TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -484,6 +488,7 @@ TEST_F(TestSFSBucket, BucketMergeAndStoreAttrs) {
 TEST_F(TestSFSBucket, DeleteBucket) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -621,6 +626,7 @@ TEST_F(TestSFSBucket, DeleteBucket) {
 TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -837,6 +843,7 @@ TEST_F(TestSFSBucket, TestListObjectsAndVersions) {
 TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -1058,6 +1065,7 @@ TEST_F(TestSFSBucket, TestListObjectsDelimiter) {
 TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -1283,6 +1291,7 @@ TEST_F(TestSFSBucket, TestListObjectVersionsDelimiter) {
 TEST_F(TestSFSBucket, UserCreateBucketObjectLockEnabled) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);
@@ -1356,6 +1365,7 @@ TEST_F(TestSFSBucket, UserCreateBucketObjectLockEnabled) {
 TEST_F(TestSFSBucket, ListNamespaceMultipartsBasics) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store = new rgw::sal::SFStore(ceph_context.get(), getTestDir());
 
   NoDoutPrefix ndp(ceph_context.get(), 1);

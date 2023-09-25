@@ -213,6 +213,7 @@ void deleteDBBucketBasic(
 TEST_F(TestSFSSQLiteBuckets, CreateAndGet) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -233,6 +234,7 @@ TEST_F(TestSFSSQLiteBuckets, CreateAndGet) {
 TEST_F(TestSFSSQLiteBuckets, ListBucketsIDs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -257,6 +259,7 @@ TEST_F(TestSFSSQLiteBuckets, ListBucketsIDs) {
 TEST_F(TestSFSSQLiteBuckets, ListBuckets) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -285,6 +288,7 @@ TEST_F(TestSFSSQLiteBuckets, ListBuckets) {
 TEST_F(TestSFSSQLiteBuckets, ListBucketsByOwner) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -328,6 +332,7 @@ TEST_F(TestSFSSQLiteBuckets, ListBucketsByOwner) {
 TEST_F(TestSFSSQLiteBuckets, ListBucketsIDsPerUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -370,6 +375,7 @@ TEST_F(TestSFSSQLiteBuckets, ListBucketsIDsPerUser) {
 TEST_F(TestSFSSQLiteBuckets, remove_bucket) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -396,6 +402,7 @@ TEST_F(TestSFSSQLiteBuckets, remove_bucket) {
 TEST_F(TestSFSSQLiteBuckets, RemoveUserThatDoesNotExist) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -420,6 +427,7 @@ TEST_F(TestSFSSQLiteBuckets, RemoveUserThatDoesNotExist) {
 TEST_F(TestSFSSQLiteBuckets, CreateAndUpdate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -447,6 +455,7 @@ TEST_F(TestSFSSQLiteBuckets, CreateAndUpdate) {
 TEST_F(TestSFSSQLiteBuckets, GetExisting) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -473,6 +482,7 @@ TEST_F(TestSFSSQLiteBuckets, GetExisting) {
 TEST_F(TestSFSSQLiteBuckets, UseStorage) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
 
@@ -519,6 +529,7 @@ TEST_F(TestSFSSQLiteBuckets, UseStorage) {
 TEST_F(TestSFSSQLiteBuckets, CreateBucketForNonExistingUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   // Create the user, we need it because OwnerID is a foreign key of User::UserID
@@ -550,6 +561,7 @@ TEST_F(TestSFSSQLiteBuckets, CreateBucketForNonExistingUser) {
 TEST_F(TestSFSSQLiteBuckets, CreateBucketOwnerNotSet) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   // Create the user, we need it because OwnerID is a foreign key of User::UserID
@@ -579,6 +591,7 @@ TEST_F(TestSFSSQLiteBuckets, CreateBucketOwnerNotSet) {
 TEST_F(TestSFSSQLiteBuckets, GetDeletedBucketsIds) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   // Create the user, we need it because OwnerID is a foreign key of User::UserID
@@ -619,6 +632,7 @@ TEST_F(TestSFSSQLiteBuckets, GetDeletedBucketsIds) {
 TEST_F(TestSFSSQLiteBuckets, TestBucketEmpty) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   // Create the user, we need it because OwnerID is a foreign key of User::UserID

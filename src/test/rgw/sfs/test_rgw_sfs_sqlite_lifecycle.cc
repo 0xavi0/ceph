@@ -52,6 +52,7 @@ std::string getLCBucketName(const rgw::sal::sfs::sqlite::DBOPBucketInfo& bucket
 TEST_F(TestSFSSQLiteLifecycle, GetHeadFirstTime) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -67,6 +68,7 @@ TEST_F(TestSFSSQLiteLifecycle, GetHeadFirstTime) {
 TEST_F(TestSFSSQLiteLifecycle, StoreHead) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -84,6 +86,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreHead) {
 TEST_F(TestSFSSQLiteLifecycle, StoreDeleteHead) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -108,6 +111,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreDeleteHead) {
 TEST_F(TestSFSSQLiteLifecycle, StoreGetEntry) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -132,6 +136,7 @@ TEST_F(TestSFSSQLiteLifecycle, StoreGetEntry) {
 TEST_F(TestSFSSQLiteLifecycle, GetNextEntry) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -201,6 +206,7 @@ TEST_F(TestSFSSQLiteLifecycle, GetNextEntry) {
 TEST_F(TestSFSSQLiteLifecycle, ListEntries) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());

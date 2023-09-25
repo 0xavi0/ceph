@@ -41,6 +41,7 @@ class TestSFSObjectStateMachine : public ::testing::Test {
   void SetUp() override {
     cct = (new CephContext(CEPH_ENTITY_TYPE_ANY))->get();
     cct->_conf.set_val("rgw_sfs_data_path", getTestDir());
+    cct->_log->start();
     fs::current_path(fs::temp_directory_path());
     fs::create_directory(TEST_DIR);
     store.reset(new rgw::sal::SFStore(cct, getTestDir()));

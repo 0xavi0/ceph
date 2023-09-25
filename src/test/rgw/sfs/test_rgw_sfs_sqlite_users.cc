@@ -101,6 +101,7 @@ DBOPUserInfo createTestUser(const std::string& suffix) {
 TEST_F(TestSFSSQLiteUsers, CreateAndGet) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -118,6 +119,7 @@ TEST_F(TestSFSSQLiteUsers, CreateAndGet) {
 TEST_F(TestSFSSQLiteUsers, CreateAndGetByEmail) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -135,6 +137,7 @@ TEST_F(TestSFSSQLiteUsers, CreateAndGetByEmail) {
 TEST_F(TestSFSSQLiteUsers, CreateAndGetByAccessKey) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -152,6 +155,7 @@ TEST_F(TestSFSSQLiteUsers, CreateAndGetByAccessKey) {
 TEST_F(TestSFSSQLiteUsers, ListUserIDs) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -173,6 +177,7 @@ TEST_F(TestSFSSQLiteUsers, ListUserIDs) {
 TEST_F(TestSFSSQLiteUsers, RemoveUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -196,6 +201,7 @@ TEST_F(TestSFSSQLiteUsers, RemoveUser) {
 TEST_F(TestSFSSQLiteUsers, RemoveUserThatDoesNotExist) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -217,6 +223,7 @@ TEST_F(TestSFSSQLiteUsers, RemoveUserThatDoesNotExist) {
 TEST_F(TestSFSSQLiteUsers, CreateAndUpdate) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -241,6 +248,7 @@ TEST_F(TestSFSSQLiteUsers, CreateAndUpdate) {
 TEST_F(TestSFSSQLiteUsers, GetExisting) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -264,6 +272,7 @@ TEST_F(TestSFSSQLiteUsers, GetExisting) {
 TEST_F(TestSFSSQLiteUsers, AddMoreThanOneUserWithSameEmail) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -288,6 +297,7 @@ TEST_F(TestSFSSQLiteUsers, AddMoreThanOneUserWithSameEmail) {
 TEST_F(TestSFSSQLiteUsers, AddMoreThanOneUserWithSameAccessKey) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
@@ -316,6 +326,7 @@ TEST_F(TestSFSSQLiteUsers, AddMoreThanOneUserWithSameAccessKey) {
 TEST_F(TestSFSSQLiteUsers, UseStorage) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
   SQLiteUsers db_users(conn);
@@ -356,6 +367,7 @@ TEST_F(TestSFSSQLiteUsers, UseStorage) {
 TEST_F(TestSFSSQLiteUsers, StoreListUsers) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -397,6 +409,7 @@ TEST_F(TestSFSSQLiteUsers, StoreListUsers) {
 TEST_F(TestSFSSQLiteUsers, StoreAddUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -429,6 +442,7 @@ TEST_F(TestSFSSQLiteUsers, StoreAddUser) {
 TEST_F(TestSFSSQLiteUsers, StoreLoadUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -454,6 +468,7 @@ TEST_F(TestSFSSQLiteUsers, StoreLoadUser) {
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -503,6 +518,7 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckOldInfo) {
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -555,6 +571,7 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserCheckVersioning) {
 TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -601,6 +618,7 @@ TEST_F(TestSFSSQLiteUsers, StoreUpdateUserErrorVersioning) {
 TEST_F(TestSFSSQLiteUsers, StoreRemoveUser) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
   auto store =
       std::make_shared<rgw::sal::SFStore>(ceph_context.get(), getTestDir());
 
@@ -658,6 +676,7 @@ TEST_F(TestSFSSQLiteUsers, StoreRemoveUser) {
 TEST_F(TestSFSSQLiteUsers, GetByAccessKeyMultipleKeys) {
   auto ceph_context = std::make_shared<CephContext>(CEPH_ENTITY_TYPE_CLIENT);
   ceph_context->_conf.set_val("rgw_sfs_data_path", getTestDir());
+  ceph_context->_log->start();
 
   EXPECT_FALSE(fs::exists(getDBFullPath()));
   DBConnRef conn = std::make_shared<DBConn>(ceph_context.get());
