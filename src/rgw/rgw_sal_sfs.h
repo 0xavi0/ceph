@@ -225,6 +225,7 @@ class SFStore : public StoreDriver {
   ) override;
   virtual int cluster_stat(RGWClusterStat& stats) override;
   virtual std::unique_ptr<Lifecycle> get_lifecycle(void) override;
+  virtual std::unique_ptr<Completions> get_completions(void) override;
   virtual RGWLC* get_rgwlc(void) override;
   virtual std::unique_ptr<Notification> get_notification(
       rgw::sal::Object* obj, rgw::sal::Object* src_obj, req_state* s,

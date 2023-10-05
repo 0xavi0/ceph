@@ -210,8 +210,6 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       "RGW_DEFAULT_USER_CAPS");
     const int system = get_env_int(
       "RGW_DEFAULT_USER_SYSTEM"); // Defaults to 0.
-    const char *assumed_role_arn = get_env_char(
-      "RGW_DEFAULT_USER_ASSUMED_ROLE_ARN");
 
     /* XXX: temporary - create testid user */
     rgw_user testid_user("", id, "");
@@ -233,9 +231,6 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       user->get_info().system = system;
       user->get_info().admin = 1;   // TODO remove when ACL is implemented
       user->get_info().type = TYPE_RGW;
-      if (assumed_role_arn != nullptr) {
-          user->get_info().assumed_role_arn = assumed_role_arn;
-      }
       if (caps != nullptr) {
           RGWUserCaps rgw_caps;
           rgw_caps.add_from_string(caps);

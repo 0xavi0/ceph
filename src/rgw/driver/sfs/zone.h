@@ -92,6 +92,9 @@ class SFSZoneGroup : public StoreZoneGroup {
         std::make_unique<RGWZoneGroup>(*group.get());
     return std::make_unique<SFSZoneGroup>(store, std::move(zg));
   }
+  bool supports(std::string_view feature) const override {
+    return group->supports(feature);
+  }
 };
 
 class SFSZone : public StoreZone {

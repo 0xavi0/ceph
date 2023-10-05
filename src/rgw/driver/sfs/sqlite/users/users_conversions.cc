@@ -46,7 +46,6 @@ DBOPUserInfo get_rgw_user(const DBUser& user) {
   assign_optional_value(user.user_quota, rgw_user.uinfo.quota.user_quota);
   assign_optional_value(user.type, rgw_user.uinfo.type);
   assign_optional_value(user.mfa_ids, rgw_user.uinfo.mfa_ids);
-  assign_optional_value(user.assumed_role_arn, rgw_user.uinfo.assumed_role_arn);
   assign_optional_value(user.user_attrs, rgw_user.user_attrs);
   assign_optional_value(user.user_version, rgw_user.user_version.ver);
   assign_optional_value(user.user_version_tag, rgw_user.user_version.tag);
@@ -81,7 +80,6 @@ DBUser get_db_user(const DBOPUserInfo& user) {
   assign_db_value(user.uinfo.quota.user_quota, db_user.user_quota);
   assign_db_value(user.uinfo.type, db_user.type);
   assign_db_value(user.uinfo.mfa_ids, db_user.mfa_ids);
-  assign_db_value(user.uinfo.assumed_role_arn, db_user.assumed_role_arn);
   assign_db_value(user.user_attrs, db_user.user_attrs);
   assign_db_value(user.user_version.ver, db_user.user_version);
   assign_db_value(user.user_version.tag, db_user.user_version_tag);

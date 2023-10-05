@@ -87,7 +87,6 @@ void compareUsersRGWInfo(const RGWUserInfo& origin, const RGWUserInfo& dest) {
   );
   ASSERT_EQ(origin.type, dest.type);
   ASSERT_EQ(origin.mfa_ids, dest.mfa_ids);
-  ASSERT_EQ(origin.assumed_role_arn, dest.assumed_role_arn);
 }
 
 void compareUserAttrs(

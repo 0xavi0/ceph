@@ -199,6 +199,11 @@ class SFSObject : public StoreObject {
    */
   virtual std::unique_ptr<DeleteOp> get_delete_op() override;
 
+    virtual int omap_get_vals(const DoutPrefixProvider *dpp, const std::string& marker, uint64_t count,
+          std::map<std::string, bufferlist> *m,
+          bool* pmore, optional_yield y) override;
+virtual int omap_get_all(const DoutPrefixProvider *dpp, std::map<std::string, bufferlist> *m,
+    optional_yield y) override;
   virtual int omap_get_vals_by_keys(
       const DoutPrefixProvider* dpp, const std::string& oid,
       const std::set<std::string>& keys, Attrs* vals
@@ -221,6 +226,9 @@ class SFSObject : public StoreObject {
       const DoutPrefixProvider* dpp, Attrs* setattrs, Attrs* delattrs,
       optional_yield y
   ) override;
+
+  virtual int delete_obj_aio(const DoutPrefixProvider* dpp, RGWObjState* astate, Completions* aio,
+          bool keep_index_consistent, optional_yield y) override;
 
   bool get_attr(const std::string& name, bufferlist& dest);
 

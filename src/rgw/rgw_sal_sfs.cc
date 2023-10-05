@@ -65,6 +65,10 @@ using namespace std;
 
 namespace rgw::sal {
 
+std::unique_ptr<Completions> SFStore::get_completions(void) {
+  return 0;
+}
+
 // Lifecycle {{{
 std::unique_ptr<Lifecycle> SFStore::get_lifecycle(void) {
   return std::make_unique<sfs::SFSLifecycle>(this);

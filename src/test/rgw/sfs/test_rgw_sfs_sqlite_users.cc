@@ -88,7 +88,6 @@ DBOPUserInfo createTestUser(const std::string& suffix) {
   user.uinfo.quota.user_quota.check_on_raw = true;
   user.uinfo.type = 44;
   user.uinfo.mfa_ids.insert("id1");
-  user.uinfo.assumed_role_arn = "assumed_role_arn";
   bufferlist buffer;
   std::string blob = "blob_test";
   buffer.append(reinterpret_cast<const char*>(blob.c_str()), blob.length());
